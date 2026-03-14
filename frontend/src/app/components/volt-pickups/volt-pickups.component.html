@@ -1,0 +1,104 @@
+<div class="page-content">
+  <div *ngIf="toast" class="wz-toast">{{ toast }}</div>
+
+  <div class="page-header">
+    <h2><i class="bi bi-truck me-2" style="color:var(--wz-primary)"></i>Pickup Opportunities</h2>
+    <p>Browse and accept waste pickup requests from users</p>
+  </div>
+
+  <!-- Tabs -->
+  <div class="filter-tabs mb-4">
+    <button [class.active]="activeFilter === 'open'" (click)="setTab('open')">
+      <i class="bi bi-search"></i> Available Pickups
+    </button>
+    <button [class.active]="activeFilter === 'mine'" (click)="setTab('mine')">
+      <i class="bi bi-person-check"></i> My Assigned Pickups
+    </button>
+  </div>
+
+  <!-- Filters -->
+  <div class="card-wz mb-4" style="padding:14px 20px">
+    <div class="row g-2 align-items-center">
+      <div class="col-md-5">
+        <div style="position:relative">
+          <i class="bi bi-geo-alt" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8"></i>
+          <input type="text" [(ngModel)]="filterLocation" (ngModelChange)="onFilterChange()"
+            placeholder="Filter by location..." style="padding:8px 12px 8px 32px;border:1.5px solid #e2e8f0;border-radius:8px;width:100%;font-size:0.875rem">
+        </div>
+      </div>
+      <div class="col-md-4">
+        <select [(ngModel)]="filterWaste" (ngModelChange)="onFilterChange()"
+          style="padding:8px 12px;border:1.5px solid #e2e8f0;border-radius:8px;width:100%;font-size:0.875rem">
+          <option value="">All Waste Types</option>
+          <option *ngFor="let w of wasteTypes.slice(1)" [value]="w">{{ w }}</option>
+        </select>
+      </div>
+      <div class="col-md-3" style="font-size:0.85rem;color:#64748b">
+        {{ filtered.length }} pickup{{ filtered.length === 1 ? '' : 's' }} found
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="loading" class="text-center py-5">
+    <div class="spinner-grow" style="color:var(--wz-primary)"></div>
+  </div>
+
+  <div *ngIf="!loading && filtered.length === 0" class="empty-state">
+    <i class="bi bi-truck"></i>
+    <h5>No pickups found</h5>
+    <p>{{ activeFilter === 'open' ? 'No open pickup requests match your filters.' : 'You have not accepted any pickups yet.' }}</p>
+  </div>
+
+  <!-- Pickup cards grid -->
+  <div class="pickup-grid" *ngIf="!loading && filtered.length > 0">
+    <div class="pickup-card card-wz" *ngFor="let p of filtered">
+      <!-- Media preview -->
+      <div *ngIf="p.mediaUrl && isImage(p.mediaUrl)" class="pickup-card-img">
+        <img [src]="p.mediaUrl" [alt]="p.title">
+      </div>
+
+      <div class="pickup-card-body">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <span class="waste-tag waste-{{p.wasteType}}">{{ p.wasteType }}</span>
+          <span class="badge-{{ p.status === 'Open' ? 'open' : p.status === 'Accepted' ? 'accepted' : p.status === 'Completed' ? 'completed' : 'cancelled' }}">
+            {{ p.status }}
+          </span>
+        </div>
+
+        <h5 class="pickup-title">{{ p.title }}</h5>
+
+        <div class="pickup-meta">
+          <div><i class="bi bi-geo-alt-fill" style="color:var(--wz-primary)"></i> {{ p.address }}</div>
+          <div><i class="bi bi-calendar3" style="color:#64748b"></i> {{ p.preferredDate | date:'MMM d, y' }} at {{ p.preferredTime }}</div>
+          <div><i class="bi bi-box" style="color:#64748b"></i> {{ p.estimatedQuantity }}</div>
+          <div><i class="bi bi-person" style="color:#64748b"></i> {{ getUserName(p) }}</div>
+        </div>
+
+        <p *ngIf="p.description" class="pickup-desc">{{ p.description | slice:0:100 }}{{ p.description.length > 100 ? '...' : '' }}</p>
+
+        <!-- Actions -->
+        <div class="pickup-actions">
+          <ng-container *ngIf="activeFilter === 'open' && p.status === 'Open'">
+            <button class="btn-wz-primary flex-1" (click)="accept(p)" [disabled]="actionLoading === p._id">
+              <i class="bi bi-check-circle"></i>
+              {{ actionLoading === p._id ? 'Accepting...' : 'Accept Pickup' }}
+            </button>
+            <button class="btn-icon-outline" (click)="contactUser(p)" title="Message user">
+              <i class="bi bi-chat-dots"></i>
+            </button>
+          </ng-container>
+
+          <ng-container *ngIf="activeFilter === 'mine'">
+            <button class="btn-icon-outline" (click)="contactUser(p)" title="Message user">
+              <i class="bi bi-chat-dots"></i> Message User
+            </button>
+            <button *ngIf="p.status === 'Accepted'" class="btn-wz-primary flex-1" (click)="complete(p)" [disabled]="actionLoading === p._id">
+              <i class="bi bi-check2-all"></i>
+              {{ actionLoading === p._id ? 'Updating...' : 'Mark Complete' }}
+            </button>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

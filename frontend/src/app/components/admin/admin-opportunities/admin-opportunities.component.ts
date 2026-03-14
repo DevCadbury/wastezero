@@ -7,6 +7,7 @@ import { AuthService } from '../../../services/auth.service';
 import { SocketService } from '../../../services/socket.service';
 import { Opportunity, Application } from '../../../models/models';
 import { Subscription } from 'rxjs';
+import { BannerService, Banner } from '../../../services/banner.service';
 
 @Component({
   selector: 'app-admin-opportunities',
@@ -38,6 +39,13 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
   // ── Skill input helper ──
   newSkill = '';
 
+  // ── Optional banner upload for opportunity ──
+  bannerFile: File | null = null;
+  bannerPreview: string | null = null;
+  existingBannerId: string | null = null;
+  existingBannerUrl: string | null = null;
+  bannerMap: Record<string, Banner> = {};
+
   // ── Application management ──
   selectedOppForApps: Opportunity | null = null;
   applications: Application[] = [];
@@ -50,11 +58,13 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
     public auth: AuthService,
     private oppService: OpportunityService,
     private appService: ApplicationService,
+    private bannerService: BannerService,
     private socketService: SocketService,
     private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit() {
+    this.loadBanners();
     this.loadOpportunities();
 
     // Real-time: refresh when new applications arrive or opportunities change
@@ -76,6 +86,7 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
 
   loadOpportunities() {
     this.loading = true;
+    this.loadBanners();
     this.oppService
       .list({
         page: this.currentPage,
@@ -113,6 +124,7 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
   openCreate() {
     this.form = this.emptyForm();
     this.editingId = null;
+    this.resetBannerState();
     this.formErrors = [];
     this.activeTab = 'create';
   }
@@ -127,6 +139,11 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
       location: opp.location,
       status: opp.status,
     };
+    const existing = this.bannerMap[opp._id];
+    this.existingBannerId = existing?._id || null;
+    this.existingBannerUrl = existing?.imageUrl || null;
+    this.bannerFile = null;
+    this.bannerPreview = null;
     this.formErrors = [];
     this.activeTab = 'edit';
   }
@@ -148,13 +165,27 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
       : this.oppService.create(payload);
 
     obs$.subscribe({
-      next: () => {
-        this.successMsg = this.editingId ? 'Opportunity updated!' : 'Opportunity created!';
-        this.saving = false;
-        this.activeTab = 'list';
-        this.loadOpportunities();
-        this.cdr.markForCheck();
-        setTimeout(() => { this.successMsg = ''; this.cdr.markForCheck(); }, 4000);
+      next: (saved) => {
+        const finalize = (bannerNotice?: string) => {
+          this.successMsg = this.editingId ? 'Opportunity updated!' : 'Opportunity created!';
+          if (bannerNotice) this.successMsg += ` ${bannerNotice}`;
+          this.saving = false;
+          this.activeTab = 'list';
+          this.resetBannerState();
+          this.loadBanners();
+          this.loadOpportunities();
+          this.cdr.markForCheck();
+          setTimeout(() => { this.successMsg = ''; this.cdr.markForCheck(); }, 4000);
+        };
+
+        if (!this.bannerFile) {
+          finalize();
+          return;
+        }
+
+        this.upsertBanner(saved)
+          .then(() => finalize())
+          .catch(() => finalize('(Opportunity saved, but banner upload failed.)'));
       },
       error: (err) => {
         this.formErrors = [err.error?.message || 'Save failed'];
@@ -265,6 +296,7 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
     this.activeTab = 'list';
     this.editingId = null;
     this.selectedOppForApps = null;
+    this.resetBannerState();
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────
@@ -278,6 +310,79 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
       location: '',
       status: 'open' as 'open' | 'in-progress' | 'closed',
     };
+  }
+
+  onBannerChange(event: Event) {
+    const input = event.target as HTMLInputElement;
+    if (!input.files?.length) return;
+    this.bannerFile = input.files[0];
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      this.bannerPreview = e.target?.result as string;
+      this.cdr.markForCheck();
+    };
+    reader.readAsDataURL(this.bannerFile);
+  }
+
+  clearBanner(event?: Event) {
+    if (event) event.stopPropagation();
+    this.bannerFile = null;
+    this.bannerPreview = null;
+    this.cdr.markForCheck();
+  }
+
+  private resetBannerState() {
+    this.bannerFile = null;
+    this.bannerPreview = null;
+    this.existingBannerId = null;
+    this.existingBannerUrl = null;
+  }
+
+  private loadBanners() {
+    this.bannerService.getAll().subscribe({
+      next: (banners) => {
+        const nextMap: Record<string, Banner> = {};
+        (banners || []).forEach((b) => {
+          const oppRef: any = b.opportunity_id as any;
+          const oppId = typeof oppRef === 'string' ? oppRef : oppRef?._id;
+          if (oppId) nextMap[oppId] = b;
+        });
+        this.bannerMap = nextMap;
+        this.cdr.markForCheck();
+      },
+      error: () => {},
+    });
+  }
+
+  private upsertBanner(opp: Opportunity): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      if (!this.bannerFile) {
+        resolve();
+        return;
+      }
+
+      const createBanner = () => {
+        const form = new FormData();
+        form.append('title', opp.title);
+        form.append('subtitle', `Volunteer opportunity in ${opp.location}`);
+        form.append('opportunity_id', opp._id);
+        form.append('image', this.bannerFile as Blob);
+        this.bannerService.create(form).subscribe({
+          next: () => resolve(),
+          error: (err) => reject(err),
+        });
+      };
+
+      if (!this.existingBannerId) {
+        createBanner();
+        return;
+      }
+
+      this.bannerService.delete(this.existingBannerId).subscribe({
+        next: () => createBanner(),
+        error: (err) => reject(err),
+      });
+    });
   }
 
   statusBadgeClass(status: string): string {

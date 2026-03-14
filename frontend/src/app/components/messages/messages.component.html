@@ -1,103 +1,164 @@
-<div class="page-header">
-  <div class="d-flex justify-content-between align-items-center">
-    <div>
-      <h2>Messages</h2>
-      <p>Communicate with users and volunteers about pickups</p>
-    </div>
-    <button class="btn-wz-primary" (click)="showNewConv = !showNewConv">
-      <i class="bi bi-pencil-square me-1"></i>New Message
-    </button>
-  </div>
-</div>
+<div class="page-content messages-page">
+  <div class="chat-shell">
 
-<!-- New conversation panel -->
-<div *ngIf="showNewConv" class="card-wz mb-3 chat-new-conv">
-  <h6 class="fw-bold mb-3">Start New Conversation</h6>
-  <div class="row g-2 form-wz align-items-end">
-    <div class="col-md-5 form-group mb-0">
-      <label>Send To</label>
-      <select [(ngModel)]="newConvUserId">
-        <option value="">Select recipient...</option>
-        <option *ngFor="let v of volunteers; trackBy: trackById" [value]="v._id">{{ v.name }} ({{ v.role }})</option>
-      </select>
-    </div>
-    <div class="col-md-5 form-group mb-0">
-      <label>Message</label>
-      <input type="text" [(ngModel)]="newMessage" placeholder="Type a message..." (keyup.enter)="sendNewConv()" />
-    </div>
-    <div class="col-md-2">
-      <button class="btn-wz-primary w-100" (click)="sendNewConv()" [disabled]="sending">Send</button>
-    </div>
-  </div>
-</div>
-
-<div *ngIf="loading" class="text-center py-5"><div class="spinner-border text-success"></div></div>
-
-<div *ngIf="!loading" class="chat-container">
-  <!-- Conversations list -->
-  <div class="chat-sidebar">
-    <div class="chat-sidebar-header">Conversations ({{ conversations.length }})</div>
-    <div *ngIf="!conversations.length" class="text-center py-4 text-muted" style="font-size:0.875rem">No conversations yet</div>
-    <div *ngFor="let conv of conversations; trackBy: trackById"
-      class="conversation-item"
-      [class.active]="selectedConv?.partner?._id === conv.partner?._id"
-      (click)="selectConversation(conv)">
-      <div class="d-flex align-items-center gap-2">
-        <div style="width:36px;height:36px;border-radius:50%;background:var(--wz-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.8rem;flex-shrink:0">
-          {{ partnerInitials(conv.partner?.name) }}
+    <!-- Sidebar -->
+    <div class="chat-sidebar-new" [class.hidden-mobile]="selectedConv">
+      <div class="chat-sidebar-header">
+        <div style="position:relative">
+          <i class="bi bi-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:0.9rem"></i>
+          <input
+            type="text"
+            [(ngModel)]="userSearchQuery"
+            (ngModelChange)="onUserSearchInput()"
+            placeholder="Search users to message..."
+            class="chat-search-input"
+          />
         </div>
-        <div style="flex:1;min-width:0">
-          <div class="conv-name">{{ conv.partner?.name }}</div>
-          <div class="conv-preview">{{ (conv.lastMessage?.content || '') | slice:0:30 }}{{ (conv.lastMessage?.content?.length || 0) > 30 ? '...' : '' }}</div>
-        </div>
-        <div *ngIf="conv.unreadCount > 0">
-          <span class="badge bg-success rounded-pill">{{ conv.unreadCount }}</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Chat area -->
-  <div class="chat-area">
-    <!-- No conversation selected -->
-    <div *ngIf="!selectedConv" class="flex-grow-1 d-flex align-items-center justify-content-center text-muted flex-column gap-2">
-      <i class="bi bi-chat-square-text fs-1"></i>
-      <p>Select a conversation to start chatting</p>
-    </div>
-
-    <!-- Active conversation -->
-    <ng-container *ngIf="selectedConv">
-      <div class="chat-header">
-        <div style="width:36px;height:36px;border-radius:50%;background:var(--wz-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.8rem">
-          {{ partnerInitials(selectedConv.partner.name) }}
-        </div>
-        <div>
-          <div>{{ selectedConv.partner.name }}</div>
-          <div style="font-size:0.75rem;color:#94a3b8;font-weight:400">{{ selectedConv.partner.role }}</div>
+        <div *ngIf="showUserSearch" class="user-search-dropdown">
+          <div *ngIf="userSearchResults.length === 0" style="padding:12px 14px;font-size:0.83rem;color:#94a3b8;text-align:center">
+            <span *ngIf="userSearchQuery.length >= 2">No users found</span>
+            <span *ngIf="userSearchQuery.length < 2">Type at least 2 characters...</span>
+          </div>
+          <div class="user-search-item" *ngFor="let u of userSearchResults; trackBy: trackById" (click)="startConvWith(u)">
+            <div class="conv-avatar" style="width:32px;height:32px;font-size:0.75rem">{{ partnerInitials(u.name) }}</div>
+            <div>
+              <div style="font-weight:600;font-size:0.85rem">{{ u.name }}</div>
+              <div style="font-size:0.75rem;color:#94a3b8">{{ u.role }}</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="messages-list">
-        <div *ngFor="let msg of messages; trackBy: trackById"
-          class="message-bubble"
-          [class.sent]="isMine(msg)"
-          [class.received]="!isMine(msg)">
-          <div>{{ msg.content }}</div>
-          <div class="msg-time">{{ msg.timestamp | date:'HH:mm · MMM d' }}</div>
+      <div class="conv-list">
+        <div *ngIf="loading" class="text-center py-4">
+          <div class="spinner-border spinner-border-sm" style="color:var(--wz-primary)"></div>
         </div>
-        <!-- Typing indicator -->
-        <div *ngIf="typingUser" class="typing-indicator">
-          <i class="bi bi-three-dots me-1"></i>{{ typingUser }} is typing...
+        <div *ngIf="!loading && conversations.length === 0" class="conv-empty">
+          <i class="bi bi-chat-dots" style="font-size:2rem;color:#e2e8f0"></i>
+          <p>No conversations yet</p>
+          <span>Search for a user above to start chatting</span>
         </div>
-        <div #msgEnd></div>
+        <div
+          class="conv-item"
+          *ngFor="let c of conversations; trackBy: trackById"
+          [class.active]="selectedConv?.partner?._id === c.partner?._id"
+          (click)="selectConversation(c)"
+        >
+          <div class="conv-avatar">{{ partnerInitials(c.partner?.name) }}</div>
+          <div class="conv-item-body">
+            <div class="conv-name-row">
+              <span class="conv-name">{{ c.partner?.name }}</span>
+              <i *ngIf="c.locked" class="bi bi-lock-fill text-danger" title="Archived conversation"></i>
+              <span class="conv-time">{{ c.lastMessage?.timestamp | date:'h:mm a' }}</span>
+            </div>
+            <div class="conv-preview-row">
+              <span class="conv-preview">
+                <i *ngIf="c.lastMessage?.mediaUrl" class="bi bi-paperclip" style="font-size:0.75rem"></i>
+                {{ c.lastMessage?.content || (c.lastMessage?.mediaUrl ? 'Attachment' : '') }}
+              </span>
+              <span *ngIf="c.unreadCount > 0" class="conv-unread-badge">{{ c.unreadCount }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat area -->
+    <div class="chat-area-new" [class.show-mobile]="selectedConv">
+      <div *ngIf="!selectedConv" class="chat-empty-state">
+        <i class="bi bi-chat-left-dots"></i>
+        <h5>Select a Conversation</h5>
+        <p>Choose from existing chats or search for a user to start a new conversation.</p>
       </div>
 
-      <div class="chat-input">
-        <input type="text" [(ngModel)]="newMessage" placeholder="Type a message..." (keyup.enter)="send()" (input)="onTyping()" />
-        <button class="btn-wz-primary" (click)="send()" [disabled]="sending || !newMessage.trim()" style="padding:8px 16px">
-          <i class="bi bi-send"></i>
-        </button>
-      </div>
-    </ng-container>
+      <ng-container *ngIf="selectedConv">
+        <div class="chat-header-new">
+          <button class="btn-back d-lg-none" (click)="selectedConv = null; messages = []">
+            <i class="bi bi-arrow-left"></i>
+          </button>
+          <div class="conv-avatar" style="width:38px;height:38px">{{ partnerInitials(selectedConv.partner?.name) }}</div>
+          <div class="ms-2 flex-1">
+            <div style="font-weight:700;font-size:0.95rem">{{ selectedConv.partner?.name }}</div>
+            <div style="font-size:0.75rem;color:#94a3b8;text-transform:capitalize">{{ selectedConv.partner?.role }}</div>
+          </div>
+          <span *ngIf="selectedConvLocked" class="badge bg-danger-subtle text-danger border border-danger-subtle">
+            <i class="bi bi-lock-fill me-1"></i>Archived
+          </span>
+        </div>
+
+        <div *ngIf="selectedConvLocked" class="alert alert-warning py-2 px-3 mb-0 rounded-0" style="font-size:0.8rem">
+          <i class="bi bi-info-circle me-1"></i>{{ lockLabel(selectedConvLockAt) }}
+        </div>
+
+        <div class="messages-list-new">
+          <div *ngIf="messages.length === 0" class="text-center py-5" style="color:#94a3b8;font-size:0.875rem">
+            <i class="bi bi-chat-dots" style="font-size:2rem;display:block;margin-bottom:8px"></i>
+            Start your conversation with {{ selectedConv.partner?.name }}
+          </div>
+
+          <ng-container *ngFor="let msg of messages; trackBy: trackById">
+            <div class="msg-wrapper" [class.msg-mine]="isMine(msg)" [class.msg-theirs]="!isMine(msg)">
+              <div *ngIf="!isMine(msg)" class="msg-avatar-sm">{{ partnerInitials(selectedConv.partner?.name) }}</div>
+              <div class="msg-col">
+                <div *ngIf="msg.mediaUrl" class="msg-bubble" [class.bubble-mine]="isMine(msg)" [class.bubble-theirs]="!isMine(msg)">
+                  <a *ngIf="isImage(msg.mediaUrl)" [href]="msg.mediaUrl" target="_blank">
+                    <img [src]="msg.mediaUrl" class="msg-media-img" alt="Attachment">
+                  </a>
+                  <video *ngIf="msg.mediaType === 'video'" [src]="msg.mediaUrl" controls class="msg-media-img"></video>
+                  <a *ngIf="msg.mediaType === 'file'" [href]="msg.mediaUrl" target="_blank" class="msg-file-link">
+                    <i class="bi bi-file-earmark-arrow-down"></i> Download File
+                  </a>
+                </div>
+                <div *ngIf="msg.content" class="msg-bubble" [class.bubble-mine]="isMine(msg)" [class.bubble-theirs]="!isMine(msg)">
+                  {{ msg.content }}
+                </div>
+                <div class="msg-meta" [class.text-end]="isMine(msg)">
+                  {{ msg.timestamp | date:'h:mm a' }}
+                  <i *ngIf="isMine(msg)" class="bi ms-1"
+                     [class.bi-check2-all]="msg.isRead"
+                     [class.bi-check2]="!msg.isRead"
+                     [style.color]="msg.isRead ? '#4caf50' : '#94a3b8'"
+                     style="font-size:0.75rem"></i>
+                </div>
+              </div>
+            </div>
+          </ng-container>
+
+          <div *ngIf="typingUser" class="typing-indicator">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span style="margin-left:6px;font-size:0.8rem">{{ typingUser }} is typing...</span>
+          </div>
+          <div #msgEnd></div>
+        </div>
+
+        <div *ngIf="selectedFile" class="file-preview-bar">
+          <img *ngIf="filePreview" [src]="filePreview" style="width:48px;height:48px;object-fit:cover;border-radius:6px" alt="preview">
+          <i *ngIf="!filePreview" class="bi bi-file-earmark" style="font-size:1.8rem;color:var(--wz-primary)"></i>
+          <span style="font-size:0.8rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ selectedFile.name }}</span>
+          <button class="btn-icon" (click)="clearFile()"><i class="bi bi-x-circle text-danger"></i></button>
+        </div>
+
+        <div class="chat-input-bar">
+          <label class="btn-attach-chat" title="Attach file">
+            <input #fileInput type="file" hidden accept="image/*,video/*,.pdf,.doc,.docx,.txt" (change)="onFileChange($event)">
+            <i class="bi bi-paperclip"></i>
+          </label>
+          <input
+            type="text"
+            [(ngModel)]="newMessage"
+            (ngModelChange)="onTyping()"
+            (keyup.enter)="send()"
+            placeholder="Type a message..."
+            class="chat-text-input"
+            [disabled]="sending || selectedConvLocked"
+          />
+          <button class="btn-send" (click)="send()" [disabled]="sending || selectedConvLocked || (!newMessage.trim() && !selectedFile)">
+            <i class="bi" [class.bi-send-fill]="!sending" [class.bi-hourglass-split]="sending"></i>
+          </button>
+        </div>
+      </ng-container>
+    </div>
   </div>
 </div>

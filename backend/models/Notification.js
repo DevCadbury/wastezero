@@ -42,7 +42,7 @@ const notificationSchema = new mongoose.Schema({
   /** Which model the ref_id points to */
   ref_model: {
     type: String,
-    enum: ['Opportunity', 'Application', 'Pickup', 'Message', null],
+    enum: ['Opportunity', 'Application', 'Pickup', 'Message', 'SupportTicket', null],
     default: null,
   },
   isRead: {

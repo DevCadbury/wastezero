@@ -24,8 +24,8 @@ app.use(cors({
   origin: ['http://localhost:4200', 'http://localhost:3000'],
   credentials: true,
 }));
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Cache-Control helper — attach to read-only routes
 app.use((req, res, next) => {
@@ -48,6 +48,9 @@ app.use('/api/opportunities', require('./routes/opportunities'));
 app.use('/api/applications', require('./routes/applications'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/search', require('./routes/search'));
+app.use('/api/support', require('./routes/support'));
+app.use('/api/upload', require('./routes/upload'));
+app.use('/api/banners', require('./routes/banners'));
 
 // Health check — no cache
 app.get('/api/health', (req, res) => {

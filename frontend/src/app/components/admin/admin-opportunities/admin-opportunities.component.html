@@ -48,6 +48,11 @@
   <div class="row g-3" *ngIf="!loading && opportunities.length">
     <div class="col-md-6 col-lg-4" *ngFor="let opp of opportunities; trackBy: trackById">
       <div class="card-wz h-100" style="border:1.5px solid #e2e8f0">
+        <img *ngIf="bannerMap[opp._id]?.imageUrl"
+             [src]="bannerMap[opp._id]?.imageUrl || ''"
+             [alt]="opp.title + ' banner'"
+             style="width:100%;height:160px;object-fit:cover;border-radius:10px;margin-bottom:10px">
+
         <div class="d-flex justify-content-between align-items-center mb-2">
           <span class="badge text-white px-2 py-1" [ngClass]="statusBadgeClass(opp.status)"
                 style="font-size:0.75rem;border-radius:6px">{{ opp.status | titlecase }}</span>
@@ -151,6 +156,29 @@
           <option value="in-progress">In Progress</option>
           <option value="closed">Closed</option>
         </select>
+      </div>
+
+      <div class="form-group">
+        <label>Banner Image <small class="text-muted">(optional)</small></label>
+        <div class="upload-drop-zone" (click)="bannerInput.click()">
+          <input #bannerInput type="file" hidden accept="image/*" (change)="onBannerChange($event)">
+
+          <div *ngIf="!bannerFile && !existingBannerUrl">
+            <i class="bi bi-image" style="font-size:2rem;color:#94a3b8"></i>
+            <p style="margin:6px 0 0;color:#64748b;font-size:0.85rem">Upload opportunity banner for homepage spotlight</p>
+          </div>
+
+          <div *ngIf="bannerFile || existingBannerUrl" class="d-flex align-items-center gap-10">
+            <img [src]="bannerPreview || existingBannerUrl || ''" style="width:96px;height:56px;object-fit:cover;border-radius:8px" alt="Banner preview">
+            <div>
+              <div style="font-weight:600;font-size:0.85rem">{{ bannerFile ? bannerFile.name : 'Current banner image' }}</div>
+              <div style="font-size:0.75rem;color:#94a3b8">Click to replace</div>
+            </div>
+            <button class="btn-icon ms-auto" (click)="clearBanner($event)">
+              <i class="bi bi-x-circle text-danger"></i>
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="d-flex gap-2 mt-3">

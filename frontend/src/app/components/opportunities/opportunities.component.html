@@ -40,6 +40,11 @@
 <div class="row g-3" *ngIf="!loading && opportunities.length">
   <div class="col-md-6 col-lg-4" *ngFor="let opp of opportunities; trackBy: trackById">
     <div class="card-wz h-100" style="border:1.5px solid #e2e8f0">
+      <img *ngIf="getBannerUrl(opp._id)"
+           [src]="getBannerUrl(opp._id)!"
+           [alt]="opp.title + ' banner'"
+           style="width:100%;height:160px;object-fit:cover;border-radius:10px;margin-bottom:10px">
+
       <div class="d-flex justify-content-between align-items-center mb-2">
         <span class="badge bg-success text-white px-2 py-1" style="font-size:0.75rem;border-radius:6px">{{ opp.status | titlecase }}</span>
         <small class="text-muted">{{ opp.createdAt | date:'mediumDate' }}</small>

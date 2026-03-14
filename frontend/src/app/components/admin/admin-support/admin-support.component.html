@@ -1,0 +1,152 @@
+<div class="page-content">
+  <div *ngIf="toast" class="wz-toast">{{ toast }}</div>
+
+  <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>
+      <h2><i class="bi bi-headset me-2" style="color:var(--wz-primary)"></i>Support Tickets</h2>
+      <p>Manage all user and volunteer support tickets</p>
+    </div>
+    <span style="font-size:0.9rem;color:#64748b">{{ total }} total ticket{{ total === 1 ? '' : 's' }}</span>
+  </div>
+
+  <!-- Filter tabs -->
+  <div class="filter-tabs mb-4">
+    <button [class.active]="filterStatus === ''" (click)="setFilter('')">All</button>
+    <button [class.active]="filterStatus === 'open'" (click)="setFilter('open')">Open</button>
+    <button [class.active]="filterStatus === 'in-progress'" (click)="setFilter('in-progress')">In Progress</button>
+    <button [class.active]="filterStatus === 'resolved'" (click)="setFilter('resolved')">Resolved</button>
+    <button [class.active]="filterStatus === 'closed'" (click)="setFilter('closed')">Closed</button>
+  </div>
+
+  <!-- Ticket list -->
+  <div *ngIf="loading" class="text-center py-5"><div class="spinner-grow" style="color:var(--wz-primary)"></div></div>
+  <div *ngIf="!loading && tickets.length === 0" class="empty-state">
+    <i class="bi bi-inbox"></i><h5>No Tickets</h5><p>No support tickets found for this filter.</p>
+  </div>
+
+  <div *ngIf="!loading && !activeTicket">
+    <div class="card-wz ticket-card" *ngFor="let t of tickets" (click)="openTicket(t)">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div class="flex-1">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="ticket-cat-badge">{{ getCategoryLabel(t.category) }}</span>
+            <span [class]="statusColors[t.status]">{{ t.status }}</span>
+            <span class="role-badge-sm" [class.role-vol]="t.role === 'volunteer'">{{ t.role }}</span>
+          </div>
+          <h6 class="ticket-subject">{{ t.subject }}</h6>
+          <div style="font-size:0.8rem;color:#64748b">
+            <i class="bi bi-person"></i>
+            <strong> {{ $any(t.user_id)?.name || 'Unknown' }}</strong>
+            ({{ $any(t.user_id)?.email || '' }})
+          </div>
+        </div>
+        <div class="text-end" style="flex-shrink:0">
+          <div style="font-size:0.75rem;color:#94a3b8">{{ t.createdAt | date:'MMM d, y' }}</div>
+          <div *ngIf="t.replies.length" style="font-size:0.75rem;color:var(--wz-primary);margin-top:4px">
+            <i class="bi bi-chat-dots"></i> {{ t.replies.length }} repl{{ t.replies.length === 1 ? 'y' : 'ies' }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ticket detail -->
+  <div *ngIf="activeTicket" class="card-wz animate-in">
+    <div class="card-wz-header">
+      <div>
+        <button class="btn-back" (click)="closeDetail()"><i class="bi bi-arrow-left"></i> Back</button>
+        <h5 class="mt-2 mb-1">{{ activeTicket.subject }}</h5>
+        <div class="d-flex gap-2 flex-wrap">
+          <span class="ticket-cat-badge">{{ getCategoryLabel(activeTicket.category) }}</span>
+          <span [class]="statusColors[activeTicket.status]">{{ activeTicket.status }}</span>
+          <span style="font-size:0.78rem;color:#64748b">{{ $any(activeTicket.user_id)?.name }} ({{ activeTicket.role }})</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Submitted-by card -->
+    <div class="ticket-user-card mb-3">
+      <div class="ticket-user-avatar">{{ userInitials($any(activeTicket.user_id)?.name) }}</div>
+      <div class="ticket-user-info">
+        <div class="ticket-user-name">{{ $any(activeTicket.user_id)?.name || 'Unknown' }}</div>
+        <div class="ticket-user-meta">
+          <span><i class="bi bi-envelope"></i> {{ $any(activeTicket.user_id)?.email || '—' }}</span>
+          <span><i class="bi bi-at"></i> {{ $any(activeTicket.user_id)?.username || '—' }}</span>
+          <span class="role-badge-sm" [class.role-vol]="activeTicket.role === 'volunteer'">
+            <i class="bi bi-person-badge"></i> {{ activeTicket.role }}
+          </span>
+        </div>
+        <div style="font-size:0.75rem;color:#94a3b8;margin-top:2px">
+          <i class="bi bi-calendar3"></i> Submitted {{ activeTicket.createdAt | date:'MMM d, y · h:mm a' }}
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mt-0">
+      <!-- Ticket content -->
+      <div class="col-lg-8">
+        <div class="ticket-description-box">
+          <p style="margin:0;white-space:pre-wrap">{{ activeTicket.description }}</p>
+          <div *ngIf="activeTicket.mediaUrl" class="mt-2">
+            <a *ngIf="isImage(activeTicket.mediaUrl)" [href]="activeTicket.mediaUrl" target="_blank">
+              <img [src]="activeTicket.mediaUrl" class="ticket-img-thumb">
+            </a>
+            <a *ngIf="!isImage(activeTicket.mediaUrl)" [href]="activeTicket.mediaUrl" target="_blank" class="file-attach-link">
+              <i class="bi bi-file-earmark-arrow-down"></i> View Attachment
+            </a>
+          </div>
+        </div>
+
+        <!-- Replies -->
+        <div class="replies-section mt-3" *ngIf="activeTicket.replies.length">
+          <div class="replies-label">Conversation</div>
+          <div class="reply-bubble" *ngFor="let r of activeTicket.replies"
+               [class.reply-mine]="r.authorRole !== 'admin'" [class.reply-admin]="r.authorRole === 'admin'">
+            <div class="reply-meta">
+              <strong>{{ r.author_id.name || 'Unknown' }}</strong>
+              <span class="reply-role">{{ r.authorRole === 'admin' ? 'Support Agent' : 'User' }}</span>
+              <span style="font-size:0.7rem;color:#94a3b8">{{ r.createdAt | date:'MMM d, h:mm a' }}</span>
+            </div>
+            <div class="reply-content">{{ r.content }}</div>
+            <div *ngIf="r.mediaUrl" class="mt-1">
+              <a *ngIf="isImage(r.mediaUrl)" [href]="r.mediaUrl" target="_blank"><img [src]="r.mediaUrl" class="ticket-img-thumb"></a>
+              <a *ngIf="!isImage(r.mediaUrl)" [href]="r.mediaUrl" target="_blank" class="file-attach-link"><i class="bi bi-paperclip"></i> Attachment</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Reply input -->
+        <div class="reply-input-row mt-3">
+          <textarea [(ngModel)]="replyContent" placeholder="Type your reply to the user..." rows="3" class="reply-textarea"></textarea>
+          <div class="d-flex align-items-center gap-2 mt-2">
+            <label class="btn-attach"><input type="file" hidden (change)="onReplyFileChange($event)"><i class="bi bi-paperclip"></i></label>
+            <span *ngIf="replyFile" style="font-size:0.78rem">{{ replyFile.name }}</span>
+            <button class="btn-wz-primary ms-auto" (click)="sendReply()" [disabled]="saving">
+              <i class="bi bi-send"></i> Send Reply
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status panel -->
+      <div class="col-lg-4">
+        <div class="card-wz" style="background:#f8fafc">
+          <h6 style="font-weight:700;margin-bottom:12px">Ticket Actions</h6>
+          <div class="form-group mb-2">
+            <label style="font-size:0.8rem;font-weight:600">Change Status</label>
+            <select [(ngModel)]="newStatus" style="padding:8px 12px;border-radius:8px;border:1.5px solid #e2e8f0;width:100%;">
+              <option *ngFor="let s of statuses" [value]="s">{{ s }}</option>
+            </select>
+          </div>
+          <div class="form-group mb-3">
+            <label style="font-size:0.8rem;font-weight:600">Admin Response (shown to user)</label>
+            <textarea [(ngModel)]="adminResponse" rows="4" style="padding:8px 12px;border-radius:8px;border:1.5px solid #e2e8f0;width:100%;resize:vertical" placeholder="Optional admin response/note..."></textarea>
+          </div>
+          <button class="btn-wz-primary w-100" (click)="saveStatus()" [disabled]="saving">
+            <i class="bi bi-save"></i> {{ saving ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

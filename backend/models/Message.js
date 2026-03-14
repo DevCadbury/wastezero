@@ -18,9 +18,11 @@ const messageSchema = new mongoose.Schema({
   },
   content: {
     type: String,
-    required: [true, 'Message content is required'],
     trim: true,
+    default: '',
   },
+  mediaUrl: { type: String, default: null },
+  mediaType: { type: String, enum: ['image', 'video', 'file', null], default: null },
   isRead: {
     type: Boolean,
     default: false,

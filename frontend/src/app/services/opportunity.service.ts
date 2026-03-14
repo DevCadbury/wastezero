@@ -17,7 +17,7 @@ export class OpportunityService {
     requiredSkills: string[];
     duration: string;
     location: string;
-  }): Observable<Opportunity> {
+  } | FormData): Observable<Opportunity> {
     return this.http.post<Opportunity>(this.apiUrl, data);
   }
 
@@ -48,7 +48,7 @@ export class OpportunityService {
   }
 
   /** Update opportunity (admin owner only) */
-  update(id: string, data: Partial<Opportunity>): Observable<Opportunity> {
+  update(id: string, data: Partial<Opportunity> | FormData): Observable<Opportunity> {
     return this.http.put<Opportunity>(`${this.apiUrl}/${id}`, data);
   }
 

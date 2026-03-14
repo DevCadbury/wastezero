@@ -25,6 +25,27 @@
         <button class="btn-nav-primary" (click)="goToDashboard()" id="nav-dashboard-btn">
           <i class="bi bi-grid-1x2" aria-hidden="true"></i> Dashboard
         </button>
+
+        <div class="account-menu-wrap" (click)="onAccountClick($event)">
+          <button class="btn-nav-outline account-trigger" (click)="toggleAccountMenu()" aria-label="Account menu">
+            <i class="bi bi-person-circle" aria-hidden="true"></i>
+            <i class="bi" [class.bi-chevron-down]="!accountMenuOpen()" [class.bi-chevron-up]="accountMenuOpen()" aria-hidden="true"></i>
+          </button>
+
+          @if (accountMenuOpen()) {
+            <div class="account-dropdown">
+              <button type="button" (click)="goToDashboard()">
+                <i class="bi bi-grid-1x2"></i> Dashboard
+              </button>
+              <button type="button" (click)="goToSettings()">
+                <i class="bi bi-gear"></i> Settings
+              </button>
+              <button type="button" class="danger" (click)="logout()">
+                <i class="bi bi-box-arrow-right"></i> Logout
+              </button>
+            </div>
+          }
+        </div>
       } @else {
         <button class="btn-nav-outline" (click)="goToLogin()" id="nav-login-btn">Log In</button>
         <button class="btn-nav-primary" (click)="goToLogin()" id="nav-get-started-btn">Get Started</button>

@@ -11,11 +11,13 @@ import {
   PLATFORM_ID,
   ChangeDetectionStrategy,
   signal,
-  computed,
+  HostListener,
 } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
+import { AuthService } from '../../services/auth.service';
 
 interface PickupRequest {
   id: number;
@@ -63,6 +65,7 @@ export class LandingComponent implements OnInit, AfterViewInit, OnDestroy {
   isLoggedIn = signal(false);
   mobileMenuOpen = signal(false);
   navScrolled = signal(false);
+  accountMenuOpen = signal(false);
 
   // Stats
   stats = [
@@ -146,20 +149,26 @@ export class LandingComponent implements OnInit, AfterViewInit, OnDestroy {
     volunteer: 'all',
   };
 
+  private authSub?: Subscription;
+
   constructor(
     @Inject(PLATFORM_ID) platformId: object,
     private el: ElementRef,
     private router: Router,
+    private auth: AuthService,
   ) {
     this.isBrowser = isPlatformBrowser(platformId);
   }
 
   ngOnInit(): void {
+    this.isLoggedIn.set(this.auth.isLoggedIn);
+    this.authSub = this.auth.currentUser$.subscribe((u) => {
+      this.isLoggedIn.set(!!u);
+      if (!u) this.accountMenuOpen.set(false);
+    });
+
     if (this.isBrowser) {
       this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      // Check if user is logged in
-      const token = localStorage.getItem('token');
-      this.isLoggedIn.set(!!token);
     }
   }
 
@@ -170,15 +179,40 @@ export class LandingComponent implements OnInit, AfterViewInit, OnDestroy {
     this.setupTimelineObserver();
     this.setupNavScroll();
     this.setupCharts();
+    this.ensureRevealFallback();
   }
 
   ngOnDestroy(): void {
+    this.authSub?.unsubscribe();
     this.observers.forEach(obs => obs.disconnect());
   }
 
   // ─── Navbar ────────────────────────────────────────
   toggleMobileMenu(): void {
     this.mobileMenuOpen.update(v => !v);
+  }
+
+  toggleAccountMenu(): void {
+    this.accountMenuOpen.update((v) => !v);
+  }
+
+  goToSettings(): void {
+    this.accountMenuOpen.set(false);
+    this.router.navigate(['/profile']);
+  }
+
+  logout(): void {
+    this.accountMenuOpen.set(false);
+    this.auth.logout();
+  }
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    if (this.accountMenuOpen()) this.accountMenuOpen.set(false);
+  }
+
+  onAccountClick(event: MouseEvent): void {
+    event.stopPropagation();
   }
 
   private setupNavScroll(): void {
@@ -237,6 +271,20 @@ export class LandingComponent implements OnInit, AfterViewInit, OnDestroy {
 
     reveals.forEach((el: Element) => observer.observe(el));
     this.observers.push(observer);
+  }
+
+  // Fallback so landing sections are never permanently hidden if observer setup fails.
+  private ensureRevealFallback(): void {
+    if (!this.isBrowser) return;
+    window.setTimeout(() => {
+      const reveals = this.el.nativeElement.querySelectorAll('.reveal');
+      if (!reveals.length) return;
+
+      const anyVisible = this.el.nativeElement.querySelectorAll('.reveal.revealed').length > 0;
+      if (anyVisible) return;
+
+      reveals.forEach((el: Element) => (el as HTMLElement).classList.add('revealed'));
+    }, 700);
   }
 
   // ─── Animated Counters ─────────────────────────────

@@ -1,0 +1,187 @@
+<div class="page-content">
+  <!-- Toast notification -->
+  <div *ngIf="toast" class="wz-toast">{{ toast }}</div>
+
+  <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+      <h2><i class="bi bi-headset me-2" style="color:var(--wz-primary)"></i>Help & Support</h2>
+      <p>Have an issue? Submit a ticket and we'll get back to you.</p>
+    </div>
+    <button class="btn-wz-primary" (click)="showForm = !showForm">
+      <i class="bi bi-plus-lg"></i> New Ticket
+    </button>
+  </div>
+
+  <!-- Create ticket form -->
+  <div *ngIf="showForm" class="card-wz mb-4 animate-in">
+    <div class="card-wz-header">
+      <h5><i class="bi bi-ticket-perforated me-2"></i>Create Support Ticket</h5>
+      <button class="btn-icon" (click)="showForm = false"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="form-wz">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="form-group">
+            <label>Category</label>
+            <select [(ngModel)]="form.category">
+              <option *ngFor="let c of categories" [value]="c.value">{{ c.label }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="form-group">
+            <label>Subject *</label>
+            <input [(ngModel)]="form.subject" placeholder="Brief description of your issue" maxlength="200" />
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="form-group">
+            <label>Description *</label>
+            <textarea [(ngModel)]="form.description" rows="5" placeholder="Describe your issue in detail..." maxlength="5000"></textarea>
+          </div>
+        </div>
+        <div class="col-12">
+          <div class="form-group">
+            <label>Attachment (optional)</label>
+            <div class="upload-drop-zone" (click)="fileInput.click()">
+              <input #fileInput type="file" hidden accept="image/*,video/*,.pdf,.doc,.docx,.txt" (change)="onFileChange($event)">
+              <div *ngIf="!selectedFile">
+                <i class="bi bi-cloud-upload" style="font-size:2rem;color:#94a3b8"></i>
+                <p style="margin:6px 0 0;color:#64748b;font-size:0.85rem">Click to browse or drag & drop</p>
+                <p style="margin:2px 0 0;color:#94a3b8;font-size:0.75rem">Images, videos, PDF, Word (max 20MB)</p>
+              </div>
+              <div *ngIf="selectedFile" class="d-flex align-items-center gap-10">
+                <img *ngIf="filePreview" [src]="filePreview" style="width:60px;height:60px;object-fit:cover;border-radius:8px">
+                <i *ngIf="!filePreview" class="bi bi-file-earmark-text" style="font-size:2.5rem;color:var(--wz-primary)"></i>
+                <div>
+                  <div style="font-weight:600;font-size:0.85rem">{{ selectedFile.name }}</div>
+                  <div style="font-size:0.75rem;color:#94a3b8">{{ (selectedFile.size/1024).toFixed(1) }} KB</div>
+                </div>
+                <button class="btn-icon ms-auto" (click)="$event.stopPropagation(); selectedFile = null; filePreview = null">
+                  <i class="bi bi-x-circle text-danger"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div *ngIf="error" class="alert-wz error mt-2">{{ error }}</div>
+      <div class="d-flex gap-2 mt-3">
+        <button class="btn-wz-primary" (click)="submitTicket()" [disabled]="submitting || !form.subject || !form.description">
+          <i class="bi" [class.bi-send]="!submitting" [class.bi-hourglass-split]="submitting"></i>
+          {{ submitting ? 'Submitting...' : 'Submit Ticket' }}
+        </button>
+        <button class="btn-wz-outline" (click)="showForm = false">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ticket list -->
+  <div *ngIf="loading" class="text-center py-5" style="color:#94a3b8">
+    <div class="spinner-grow" style="width:2rem;height:2rem;color:var(--wz-primary)"></div>
+  </div>
+
+  <div *ngIf="!loading && tickets.length === 0 && !showForm" class="empty-state">
+    <i class="bi bi-headset"></i>
+    <h5>No Support Tickets</h5>
+    <p>You haven't submitted any tickets yet. Click "New Ticket" to create one.</p>
+  </div>
+
+  <div *ngIf="!loading && tickets.length > 0 && !activeTicket">
+    <div class="card-wz ticket-card" *ngFor="let t of tickets" (click)="openTicket(t)">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div class="flex-1">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="ticket-cat-badge">{{ getCategoryLabel(t.category) }}</span>
+            <span [class]="statusColors[t.status] + ' ms-1'">{{ t.status }}</span>
+          </div>
+          <h6 class="ticket-subject">{{ t.subject }}</h6>
+          <p class="ticket-preview">{{ t.description | slice:0:120 }}{{ t.description.length > 120 ? '...' : '' }}</p>
+        </div>
+        <div class="text-end" style="flex-shrink:0">
+          <div style="font-size:0.75rem;color:#94a3b8">{{ t.createdAt | date:'MMM d, y' }}</div>
+          <div *ngIf="t.replies.length" style="font-size:0.75rem;color:var(--wz-primary);margin-top:4px">
+            <i class="bi bi-chat-dots"></i> {{ t.replies.length }} repl{{ t.replies.length === 1 ? 'y' : 'ies' }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ticket detail -->
+  <div *ngIf="activeTicket" class="card-wz animate-in">
+    <div class="card-wz-header">
+      <div>
+        <button class="btn-back" (click)="closeDetail()"><i class="bi bi-arrow-left"></i> Back to Tickets</button>
+        <h5 class="mt-2 mb-0">{{ activeTicket.subject }}</h5>
+        <div class="d-flex gap-2 mt-1">
+          <span class="ticket-cat-badge">{{ getCategoryLabel(activeTicket.category) }}</span>
+          <span [class]="statusColors[activeTicket.status]">{{ activeTicket.status }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Original description -->
+    <div class="ticket-description-box">
+      <p style="margin:0;white-space:pre-wrap">{{ activeTicket.description }}</p>
+      <div *ngIf="activeTicket.mediaUrl" class="mt-2">
+        <a *ngIf="isImage(activeTicket.mediaUrl)" [href]="activeTicket.mediaUrl" target="_blank">
+          <img [src]="activeTicket.mediaUrl" class="ticket-img-thumb">
+        </a>
+        <a *ngIf="!isImage(activeTicket.mediaUrl)" [href]="activeTicket.mediaUrl" target="_blank" class="file-attach-link">
+          <i class="bi bi-file-earmark-arrow-down"></i> View Attachment
+        </a>
+      </div>
+    </div>
+
+    <!-- Admin response (if exists) -->
+    <div *ngIf="activeTicket.adminResponse" class="admin-response-box">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <i class="bi bi-shield-check" style="color:var(--wz-primary)"></i>
+        <strong style="font-size:0.85rem">Admin Response</strong>
+      </div>
+      <p style="margin:0;white-space:pre-wrap">{{ activeTicket.adminResponse }}</p>
+    </div>
+
+    <!-- Chat-style replies -->
+    <div class="replies-section" *ngIf="activeTicket.replies.length">
+      <div class="replies-label">Conversation</div>
+      <div class="reply-bubble" *ngFor="let r of activeTicket.replies"
+           [class.reply-mine]="r.authorRole !== 'admin'" [class.reply-admin]="r.authorRole === 'admin'">
+        <div class="reply-meta">
+          <strong>{{ r.author_id.name || 'Unknown' }}</strong>
+          <span class="reply-role">{{ r.authorRole === 'admin' ? 'Support Agent' : 'You' }}</span>
+          <span style="font-size:0.7rem;color:#94a3b8">{{ r.createdAt | date:'MMM d, h:mm a' }}</span>
+        </div>
+        <div class="reply-content">{{ r.content }}</div>
+        <div *ngIf="r.mediaUrl" class="mt-1">
+          <a *ngIf="isImage(r.mediaUrl)" [href]="r.mediaUrl" target="_blank">
+            <img [src]="r.mediaUrl" class="ticket-img-thumb">
+          </a>
+          <a *ngIf="!isImage(r.mediaUrl)" [href]="r.mediaUrl" target="_blank" class="file-attach-link">
+            <i class="bi bi-paperclip"></i> Attachment
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reply input -->
+    <div class="reply-input-row" *ngIf="activeTicket.status !== 'closed' && activeTicket.status !== 'resolved'">
+      <textarea [(ngModel)]="replyContent" placeholder="Type your reply..." rows="3" class="reply-textarea"></textarea>
+      <div class="d-flex align-items-center gap-2 mt-2">
+        <label class="btn-attach" title="Attach file">
+          <input type="file" hidden (change)="onReplyFileChange($event)">
+          <i class="bi bi-paperclip"></i>
+        </label>
+        <span *ngIf="replyFile" style="font-size:0.78rem;color:#64748b">{{ replyFile.name }}</span>
+        <button class="btn-wz-primary ms-auto" (click)="sendReply()" [disabled]="sendingReply || (!replyContent.trim() && !replyFile)">
+          <i class="bi bi-send"></i> {{ sendingReply ? 'Sending...' : 'Send Reply' }}
+        </button>
+      </div>
+    </div>
+    <div *ngIf="activeTicket.status === 'resolved' || activeTicket.status === 'closed'" class="closed-notice">
+      <i class="bi bi-check-circle-fill" style="color:var(--wz-primary)"></i>
+      This ticket is {{ activeTicket.status }}. Create a new ticket if you need further assistance.
+    </div>
+  </div>
+</div>

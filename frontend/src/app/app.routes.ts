@@ -87,7 +87,31 @@ export const routes: Routes = [
         data: { roles: ['admin'] },
         loadComponent: () => import('./components/admin/admin-opportunities/admin-opportunities.component').then(m => m.AdminOpportunitiesComponent),
       },
+      {
+        path: 'support',
+        loadComponent: () => import('./components/support/support.component').then(m => m.SupportComponent),
+      },
+      {
+        path: 'volt-pickups',
+        canActivate: [authGuard],
+        data: { roles: ['volunteer'] },
+        loadComponent: () => import('./components/volt-pickups/volt-pickups.component').then(m => m.VoltPickupsComponent),
+      },
+      {
+        path: 'admin/support',
+        canActivate: [authGuard],
+        data: { roles: ['admin'] },
+        loadComponent: () => import('./components/admin/admin-support/admin-support.component').then(m => m.AdminSupportComponent),
+      },
     ],
+  },
+  {
+    path: 'forgot-password',
+    loadComponent: () => import('./components/forgot-password/forgot-password.component').then(m => m.ForgotPasswordComponent),
+  },
+  {
+    path: 'reset-password',
+    loadComponent: () => import('./components/reset-password/reset-password.component').then(m => m.ResetPasswordComponent),
   },
   { path: '**', redirectTo: '/dashboard' },
 ];

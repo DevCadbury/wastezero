@@ -205,6 +205,61 @@ $tablet-bp: 1024px;
   display: flex;
   gap: 10px;
   flex-shrink: 0;
+  align-items: center;
+}
+
+.account-menu-wrap {
+  position: relative;
+}
+
+.account-trigger {
+  padding: 8px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+
+  i.bi-person-circle {
+    font-size: 1rem;
+  }
+}
+
+.account-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid $slate-200;
+  border-radius: $radius-md;
+  box-shadow: $shadow-md;
+  z-index: 1200;
+  padding: 6px;
+
+  button {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: $slate-700;
+    font-size: 0.86rem;
+    font-weight: 600;
+    border-radius: 8px;
+    padding: 8px 10px;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+
+    &:hover {
+      background: $green-50;
+      color: $green-700;
+    }
+
+    &.danger:hover {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
+  }
 }
 
 .btn-nav-outline {

@@ -8,6 +8,7 @@ import { AuthService } from '../../services/auth.service';
 import { SocketService } from '../../services/socket.service';
 import { Opportunity, Application } from '../../models/models';
 import { Subscription } from 'rxjs';
+import { BannerService, Banner } from '../../services/banner.service';
 
 @Component({
   selector: 'app-opportunities',
@@ -32,6 +33,7 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
 
   selectedOpp: Opportunity | null = null;
   applyingId: string | null = null;
+  bannerMap: Record<string, Banner> = {};
 
   private subs: Subscription[] = [];
 
@@ -39,11 +41,13 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
     public auth: AuthService,
     private oppService: OpportunityService,
     private appService: ApplicationService,
+    private bannerService: BannerService,
     private socketService: SocketService,
     private cdr: ChangeDetectorRef,
   ) {}
 
   ngOnInit() {
+    this.loadBanners();
     this.load();
     if (this.auth.userRole === 'volunteer') {
       this.loadMyApplications();
@@ -68,6 +72,7 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
   load() {
     this.loading = true;
     this.errorMsg = '';
+    this.loadBanners();
     this.oppService
       .list({
         page: this.currentPage,
@@ -89,6 +94,26 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         },
       });
+  }
+
+  loadBanners() {
+    this.bannerService.getActive().subscribe({
+      next: (banners) => {
+        const nextMap: Record<string, Banner> = {};
+        (banners || []).forEach((b) => {
+          const oppRef: any = b.opportunity_id as any;
+          const oppId = typeof oppRef === 'string' ? oppRef : oppRef?._id;
+          if (oppId) nextMap[oppId] = b;
+        });
+        this.bannerMap = nextMap;
+        this.cdr.markForCheck();
+      },
+      error: () => {},
+    });
+  }
+
+  getBannerUrl(oppId: string): string | null {
+    return this.bannerMap[oppId]?.imageUrl || null;
   }
 
   loadMyApplications() {

@@ -55,11 +55,34 @@
           <input type="text" [(ngModel)]="form.contactDetails" name="contactDetails" placeholder="Alternative phone / contact info" />
         </div>
 
+        <!-- Media upload -->
+        <div class="form-group">
+          <label>Photo/Media (optional)</label>
+          <div class="upload-drop-zone" (click)="fileInput.click()">
+            <input #fileInput type="file" hidden accept="image/*,video/*" (change)="onFileChange($event)">
+            <div *ngIf="!selectedFile">
+              <i class="bi bi-image" style="font-size:2rem;color:#94a3b8"></i>
+              <p style="margin:4px 0 0;font-size:0.83rem;color:#64748b">Click to attach a photo of the waste</p>
+            </div>
+            <div *ngIf="selectedFile" class="d-flex align-items-center gap-10">
+              <img *ngIf="filePreview" [src]="filePreview" style="width:64px;height:64px;object-fit:cover;border-radius:8px">
+              <i *ngIf="!filePreview" class="bi bi-film" style="font-size:2rem;color:var(--wz-primary)"></i>
+              <div>
+                <div style="font-weight:600;font-size:0.85rem">{{ selectedFile.name }}</div>
+                <div style="font-size:0.75rem;color:#94a3b8">{{ (selectedFile.size/1024).toFixed(1) }} KB</div>
+              </div>
+              <button class="btn-icon ms-auto" type="button" (click)="$event.stopPropagation(); selectedFile = null; filePreview = null">
+                <i class="bi bi-x-circle text-danger"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="d-flex gap-3 mt-3">
-          <button type="submit" class="btn-wz-primary" [disabled]="loading">
-            <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
-            <i *ngIf="!loading" class="bi bi-calendar-check me-2"></i>
-            Schedule Pickup
+          <button type="submit" class="btn-wz-primary" [disabled]="loading || uploading">
+            <span *ngIf="loading || uploading" class="spinner-border spinner-border-sm me-2"></span>
+            <i *ngIf="!loading && !uploading" class="bi bi-calendar-check me-2"></i>
+            {{ uploading ? 'Uploading...' : loading ? 'Scheduling...' : 'Schedule Pickup' }}
           </button>
           <button type="button" class="btn-wz-outline" (click)="reset()">Reset</button>
         </div>

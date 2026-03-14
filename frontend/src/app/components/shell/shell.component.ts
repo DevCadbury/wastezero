@@ -42,7 +42,10 @@ export class ShellComponent implements OnInit, OnDestroy {
     private notifService: NotificationService,
     private searchService: SearchService,
     private socketService: SocketService,
-  ) {}
+  ) {
+    this.darkMode = localStorage.getItem('wz-dark') === '1';
+    document.body.classList.toggle('dark-mode', this.darkMode);
+  }
 
   ngOnInit() {
     this.subs.push(
@@ -121,6 +124,8 @@ export class ShellComponent implements OnInit, OnDestroy {
   toggleDark() {
     this.darkMode = !this.darkMode;
     document.body.classList.toggle('dark-mode', this.darkMode);
+    localStorage.setItem('wz-dark', this.darkMode ? '1' : '0');
+    this.cdr.markForCheck();
   }
 
   // ── Notifications ───────────────────────────────────────────────────────

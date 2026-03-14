@@ -50,6 +50,9 @@
         <a routerLink="/my-pickups" [class.active]="isActive('/my-pickups')">
           <i class="bi bi-truck"></i> My Assigned Pickups
         </a>
+        <a routerLink="/volt-pickups" [class.active]="isActive('/volt-pickups')">
+          <i class="bi bi-lightning-charge"></i> Pickup Requests
+        </a>
       </ng-container>
 
       <!-- Admin links -->
@@ -69,11 +72,19 @@
         <a routerLink="/admin/reports" [class.active]="isActive('/admin/reports')">
           <i class="bi bi-file-earmark-bar-graph"></i> Reports
         </a>
+        <a routerLink="/admin/support" [class.active]="isActive('/admin/support')">
+          <i class="bi bi-headset"></i> Support Tickets
+        </a>
       </ng-container>
 
       <a routerLink="/messages" [class.active]="isActive('/messages')">
         <i class="bi bi-chat-dots"></i> Messages
       </a>
+      <ng-container *ngIf="user?.role !== 'admin'">
+        <a routerLink="/support" [class.active]="isActive('/support')">
+          <i class="bi bi-life-preserver"></i> Help &amp; Support
+        </a>
+      </ng-container>
 
       <ng-container *ngIf="user?.role === 'user'">
         <a routerLink="/my-impact" [class.active]="isActive('/my-impact')">
@@ -85,11 +96,6 @@
       <a routerLink="/profile" [class.active]="isActive('/profile')">
         <i class="bi bi-person-circle"></i> My Profile
       </a>
-      <ng-container *ngIf="user?.role === 'admin'">
-        <a routerLink="/admin/panel" [class.active]="isActive('/admin/panel')">
-          <i class="bi bi-shield-check"></i> Admin Panel
-        </a>
-      </ng-container>
     </div>
 
     <div class="sidebar-footer">
