@@ -4,6 +4,7 @@ import { RouterModule } from '@angular/router';
 import { PickupService } from '../../services/pickup.service';
 import { AuthService } from '../../services/auth.service';
 import { MessageService } from '../../services/message.service';
+import { UploadService } from '../../services/upload.service';
 import { FormsModule } from '@angular/forms';
 import { Pickup } from '../../models/models';
 
@@ -24,11 +25,16 @@ export class MyPickupsComponent implements OnInit {
   msgModal: { pickup: Pickup; receiverId: string; receiverName: string } | null = null;
   msgContent = '';
   msgSending = false;
+  completionModalPickup: Pickup | null = null;
+  completionFiles: File[] = [];
+  completionPreviews: string[] = [];
+  completionUploading = false;
 
   constructor(
     public auth: AuthService,
     private pickupService: PickupService,
     private messageService: MessageService,
+    private uploadService: UploadService,
     private cdr: ChangeDetectorRef,
   ) {}
 
@@ -48,10 +54,83 @@ export class MyPickupsComponent implements OnInit {
   }
 
   complete(id: string) {
+    const pickup = this.pickups.find((p) => p._id === id);
+    if (pickup?.requestType === 'IllegalDump' && this.auth.userRole === 'volunteer') {
+      this.completionModalPickup = pickup;
+      this.completionFiles = [];
+      this.completionPreviews = [];
+      this.cdr.markForCheck();
+      return;
+    }
+
     this.pickupService.completePickup(id).subscribe({
       next: () => { this.successMsg = 'Pickup marked as completed!'; this.load(); },
       error: (err) => { this.errorMsg = err.error?.message || 'Error'; },
     });
+  }
+
+  onCompletionProofChange(e: Event) {
+    const input = e.target as HTMLInputElement;
+    if (!input.files?.length) return;
+
+    this.completionFiles = Array.from(input.files).slice(0, 5);
+    this.completionPreviews = [];
+    this.completionFiles.forEach((f) => {
+      if (!f.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (r) => {
+        const data = r.target?.result as string;
+        if (data) {
+          this.completionPreviews = [...this.completionPreviews, data];
+          this.cdr.markForCheck();
+        }
+      };
+      reader.readAsDataURL(f);
+    });
+    this.cdr.markForCheck();
+  }
+
+  submitCompletionWithProof() {
+    if (!this.completionModalPickup) return;
+    if (!this.completionFiles.length) {
+      this.errorMsg = 'Please upload completion proof photos.';
+      this.cdr.markForCheck();
+      return;
+    }
+
+    this.completionUploading = true;
+    const pickup = this.completionModalPickup;
+    this.uploadService.uploadMultiple(this.completionFiles, 'illegal-dumps-completion').subscribe({
+      next: (results) => {
+        const completionProofImages = (results || []).map((r) => r.url).filter(Boolean);
+        this.pickupService.completePickup(pickup._id, { completionProofImages }).subscribe({
+          next: () => {
+            this.successMsg = 'Cleanup marked complete and sent for admin approval.';
+            this.completionUploading = false;
+            this.closeCompletionModal();
+            this.load();
+          },
+          error: (err) => {
+            this.completionUploading = false;
+            this.errorMsg = err.error?.message || 'Error';
+            this.cdr.markForCheck();
+          },
+        });
+      },
+      error: () => {
+        this.completionUploading = false;
+        this.errorMsg = 'Proof upload failed. Please try again.';
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  closeCompletionModal() {
+    this.completionModalPickup = null;
+    this.completionFiles = [];
+    this.completionPreviews = [];
+    this.completionUploading = false;
+    this.cdr.markForCheck();
   }
 
   cancel(id: string) {

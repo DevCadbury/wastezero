@@ -16,6 +16,11 @@ const pickupSchema = new mongoose.Schema({
     ref: 'User',
     default: null,
   },
+  requestType: {
+    type: String,
+    enum: ['Pickup', 'IllegalDump'],
+    default: 'Pickup',
+  },
   wasteType: {
     type: String,
     enum: ['Plastic', 'Organic', 'E-Waste', 'Metal', 'Paper', 'Glass', 'Other'],
@@ -45,10 +50,40 @@ const pickupSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  mediaUrl: {
+    type: String,
+    default: null,
+  },
+  reportImages: {
+    type: [String],
+    default: [],
+  },
+  completionProofImages: {
+    type: [String],
+    default: [],
+  },
   status: {
     type: String,
     enum: ['Open', 'Accepted', 'Completed', 'Cancelled'],
     default: 'Open',
+  },
+  adminApprovalStatus: {
+    type: String,
+    enum: ['not-required', 'pending', 'approved', 'rejected'],
+    default: 'not-required',
+  },
+  approvedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
+  approvedAt: {
+    type: Date,
+    default: null,
+  },
+  pointsAwarded: {
+    type: Boolean,
+    default: false,
   },
   completedAt: {
     type: Date,
@@ -75,5 +110,6 @@ pickupSchema.index({ user_id: 1, createdAt: -1 });          // user's own pickup
 pickupSchema.index({ volunteer_id: 1, createdAt: -1 });     // volunteer's pickups
 pickupSchema.index({ status: 1, volunteer_id: 1 });         // volunteer stats
 pickupSchema.index({ status: 1, wasteType: 1 });            // waste aggregation
+pickupSchema.index({ requestType: 1, status: 1, adminApprovalStatus: 1 });
 
 module.exports = mongoose.model('Pickup', pickupSchema);

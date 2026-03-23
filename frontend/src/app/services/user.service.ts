@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { User } from '../models/models';
+import { PointHistoryPage, User } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
 export class UserService {
@@ -28,5 +28,18 @@ export class UserService {
 
   getVolunteers(): Observable<User[]> {
     return this.http.get<User[]>(`${this.apiUrl}/users/volunteers`);
+  }
+
+  getPointsSummary(): Observable<{ rewardPoints: number; totalPointsEarned: number }> {
+    return this.http.get<{ rewardPoints: number; totalPointsEarned: number }>(`${this.apiUrl}/users/points/summary`);
+  }
+
+  getPointsHistory(params?: { page?: number; limit?: number }): Observable<PointHistoryPage> {
+    const search = new URLSearchParams();
+    if (params?.page) search.set('page', String(params.page));
+    if (params?.limit) search.set('limit', String(params.limit));
+    const qs = search.toString();
+    const url = `${this.apiUrl}/users/points/history${qs ? `?${qs}` : ''}`;
+    return this.http.get<PointHistoryPage>(url);
   }
 }

@@ -54,6 +54,13 @@ export class AdminPickupsComponent implements OnInit {
     });
   }
 
+  approveCompletion(id: string) {
+    this.pickupService.approveCompletion(id).subscribe({
+      next: () => { this.successMsg = 'Illegal dump completion approved and points awarded.'; this.load(); },
+      error: (err) => { this.errorMsg = err.error?.message || 'Error'; },
+    });
+  }
+
   deletePickup(id: string) {
     if (!confirm('Delete this pickup? This cannot be undone.')) return;
     this.pickupService.deletePickup(id).subscribe({

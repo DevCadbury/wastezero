@@ -57,6 +57,8 @@ router.post('/register', async (req, res) => {
       email: user.email,
       username: user.username,
       role: user.role,
+      rewardPoints: user.rewardPoints || 0,
+      totalPointsEarned: user.totalPointsEarned || 0,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -95,6 +97,8 @@ router.post('/login', async (req, res) => {
       bio: user.bio,
       phone: user.phone,
       wasteStats: user.wasteStats,
+      rewardPoints: user.rewardPoints || 0,
+      totalPointsEarned: user.totalPointsEarned || 0,
       token: generateToken(user._id),
     });
   } catch (error) {

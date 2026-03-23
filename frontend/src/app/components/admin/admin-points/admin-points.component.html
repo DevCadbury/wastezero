@@ -1,0 +1,313 @@
+<div class="page-header">
+  <h2>Manage Points</h2>
+  <p>Manage user points and review adjustment history in separate tabs</p>
+</div>
+
+<div *ngIf="successMsg" class="alert-wz success mb-3">{{ successMsg }}</div>
+<div *ngIf="errorMsg" class="alert-wz error mb-3">{{ errorMsg }}</div>
+
+<div class="card-wz mb-3" style="background:#fffbeb;border:1px solid #fde68a">
+  <div style="font-size:0.86rem;color:#7c2d12">
+    Points editing is admin-only. Every change is logged with before/after values, reason, and admin identity.
+  </div>
+</div>
+
+<div class="card-wz mb-3">
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn"
+            [class.btn-success]="activeTab === 'manage'"
+            [class.btn-outline-success]="activeTab !== 'manage'"
+            (click)="setTab('manage')">
+      Manage Users
+    </button>
+    <button class="btn"
+            [class.btn-success]="activeTab === 'logs'"
+            [class.btn-outline-success]="activeTab !== 'logs'"
+            (click)="setTab('logs')">
+      Points Edit Logs
+    </button>
+  </div>
+</div>
+
+<ng-container *ngIf="activeTab === 'manage'">
+  <div class="card-wz mb-3">
+    <div class="row g-3 align-items-end form-wz">
+      <div class="col-md-6 form-group mb-0">
+        <label>Search Points Users</label>
+        <input type="text" [(ngModel)]="pointsFilter" placeholder="Search by name or email..." />
+      </div>
+      <div class="col-md-6 text-end">
+        <span class="text-muted" style="font-size:0.875rem">{{ filteredPointsUsers.length }} records</span>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="pointsLoading" class="text-center py-4"><div class="spinner-border text-success"></div></div>
+
+  <div class="card-wz" *ngIf="!pointsLoading">
+    <div class="table-responsive">
+      <table class="table-wz w-100">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Role</th>
+            <th>Current Points</th>
+            <th>Total Earned</th>
+            <th>Transactions</th>
+            <th>Delta</th>
+            <th>Reason</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let u of filteredPointsUsers; trackBy: trackById">
+            <td>
+              <div class="fw-bold" style="font-size:0.875rem">{{ u.name }}</div>
+              <div class="text-muted" style="font-size:0.78rem">{{ u.email }}</div>
+            </td>
+            <td><span class="badge" [class.bg-success]="u.role==='volunteer'" [class.bg-primary]="u.role==='user'" style="text-transform:capitalize">{{ u.role }}</span></td>
+            <td><strong>{{ u.rewardPoints || 0 }}</strong></td>
+            <td>{{ u.totalPointsEarned || 0 }}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-primary" (click)="openUserHistory(u)">View Records</button>
+            </td>
+            <td style="min-width:120px">
+              <input type="number" class="form-control" [(ngModel)]="adjustDelta[u._id]" placeholder="e.g. 10 or -5" />
+            </td>
+            <td style="min-width:220px">
+              <input type="text" class="form-control" [(ngModel)]="adjustReason[u._id]" placeholder="Reason for correction" />
+            </td>
+            <td>
+              <button class="btn btn-sm btn-success"
+                      (click)="applyAdjustment(u)"
+                      [disabled]="adjustingUserId === u._id">
+                <span *ngIf="adjustingUserId === u._id" class="spinner-border spinner-border-sm me-1"></span>
+                Apply
+              </button>
+            </td>
+          </tr>
+          <tr *ngIf="!filteredPointsUsers.length">
+            <td colspan="8" class="text-center text-muted py-4">No users found</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div *ngIf="showUserHistoryDialog && selectedUser" class="modal d-block" tabindex="-1" style="background:rgba(2,6,23,0.45)">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title">User Transaction Records</h5>
+            <div class="text-muted" style="font-size:0.82rem">
+              {{ selectedUser.name }} · Current {{ selectedUser.rewardPoints || 0 }} · Lifetime {{ selectedUser.totalPointsEarned || 0 }}
+            </div>
+          </div>
+          <button type="button" class="btn-close" aria-label="Close" (click)="closeUserHistory()"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="row g-3 align-items-end form-wz mb-3">
+            <div class="col-md-4 form-group mb-0">
+              <label>Search Reason</label>
+              <input type="text" [(ngModel)]="userHistorySearch" placeholder="Search reason..." />
+            </div>
+            <div class="col-md-2 form-group mb-0">
+              <label>Source</label>
+              <select [(ngModel)]="userHistorySource">
+                <option value="">All</option>
+                <option value="illegal-dump">Illegal Dump</option>
+                <option value="pickup">Pickup</option>
+                <option value="system">System</option>
+              </select>
+            </div>
+            <div class="col-md-2 form-group mb-0">
+              <label>From</label>
+              <input type="date" [(ngModel)]="userHistoryFrom" />
+            </div>
+            <div class="col-md-2 form-group mb-0">
+              <label>To</label>
+              <input type="date" [(ngModel)]="userHistoryTo" />
+            </div>
+            <div class="col-md-2 d-flex gap-2">
+              <button class="btn-wz-primary" (click)="loadSelectedUserHistory(1)">Apply</button>
+              <button class="btn-wz-outline" (click)="clearUserHistoryFilters()">Clear</button>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-muted" style="font-size:0.8rem">{{ userHistoryTotal }} entries</span>
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted" style="font-size:0.8rem">Rows</span>
+              <select style="width:90px" [(ngModel)]="userHistoryLimit" (ngModelChange)="onUserHistoryLimitChange()">
+                <option [ngValue]="10">10</option>
+                <option [ngValue]="25">25</option>
+                <option [ngValue]="50">50</option>
+              </select>
+            </div>
+          </div>
+
+          <div *ngIf="userHistoryLoading" class="text-center py-4"><div class="spinner-border text-success"></div></div>
+
+          <div class="table-responsive" *ngIf="!userHistoryLoading">
+            <table class="table-wz w-100">
+              <thead>
+                <tr>
+                  <th>Transaction ID</th>
+                  <th>Date</th>
+                  <th>Edited By</th>
+                  <th>Reason</th>
+                  <th>Source</th>
+                  <th>Pickup</th>
+                  <th class="text-end">Current At Txn</th>
+                  <th class="text-end">Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let tx of userHistory; trackBy: trackById"
+                    [style.borderLeft]="'4px solid ' + (tx.points < 0 ? '#fca5a5' : '#86efac')"
+                    [style.background]="tx.points < 0 ? '#fff1f2' : '#f0fdf4'">
+                  <td>
+                    <div class="d-flex align-items-center gap-2">
+                      <span class="text-muted" style="font-size:0.78rem">{{ shortId(tx._id) }}</span>
+                      <button class="btn btn-sm btn-outline-secondary" (click)="copyText(tx._id)">Copy</button>
+                    </div>
+                  </td>
+                  <td>{{ tx.createdAt | date:'short' }}</td>
+                  <td>{{ transactionEditorName(tx) }}</td>
+                  <td>
+                    <span class="badge me-1" [class.bg-danger]="tx.points < 0" [class.bg-success]="tx.points >= 0">{{ tx.points < 0 ? 'Deducted' : 'Added' }}</span>
+                    {{ tx.reason }}
+                  </td>
+                  <td><span class="badge bg-light text-dark">{{ tx.source | titlecase }}</span></td>
+                  <td>{{ tx.pickup_id?.title || '-' }}</td>
+                  <td class="text-end fw-bold">{{ tx.balanceAfter ?? '-' }}</td>
+                  <td class="text-end" style="font-weight:700" [ngClass]="pointsClass(tx.points)">{{ formatPoints(tx.points) }}</td>
+                </tr>
+                <tr *ngIf="!userHistory.length">
+                  <td colspan="8" class="text-center text-muted py-4">No point transactions found for this user</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div *ngIf="!userHistoryLoading && userHistoryPages > 1" class="d-flex justify-content-center align-items-center gap-2 mt-2">
+            <button class="btn-wz-outline btn-sm" [disabled]="userHistoryPage <= 1" (click)="goToUserHistoryPage(userHistoryPage - 1)">Prev</button>
+            <span class="text-muted" style="font-size:0.82rem">Page {{ userHistoryPage }} of {{ userHistoryPages }}</span>
+            <button class="btn-wz-outline btn-sm" [disabled]="userHistoryPage >= userHistoryPages" (click)="goToUserHistoryPage(userHistoryPage + 1)">Next</button>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-wz-outline" (click)="closeUserHistory()">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</ng-container>
+
+<ng-container *ngIf="activeTab === 'logs'">
+  <div class="page-header mt-4">
+    <h2>Points Edit Logs</h2>
+    <p>Filter and search points adjustment actions (recent logs shown by default)</p>
+  </div>
+
+  <div class="card-wz mb-3">
+    <div class="row g-3 align-items-end form-wz">
+      <div class="col-md-4 form-group mb-0">
+        <label>Search Logs</label>
+        <input type="text" [(ngModel)]="logsSearch" placeholder="Search details, affected user, admin name/email..." />
+      </div>
+      <div class="col-md-2 form-group mb-0">
+        <label>Recent (days)</label>
+        <input type="number" min="1" [(ngModel)]="logsRecentDays" placeholder="30" />
+      </div>
+      <div class="col-md-2 form-group mb-0">
+        <label>From Date</label>
+        <input type="date" [(ngModel)]="logsFrom" />
+      </div>
+      <div class="col-md-2 form-group mb-0">
+        <label>To Date</label>
+        <input type="date" [(ngModel)]="logsTo" />
+      </div>
+      <div class="col-md-2 d-flex gap-2">
+        <button class="btn-wz-primary" (click)="loadLogs(1)">Apply</button>
+        <button class="btn-wz-outline" (click)="clearLogFilters()">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="logsLoading" class="text-center py-4"><div class="spinner-border text-success"></div></div>
+
+  <div class="card-wz" *ngIf="!logsLoading">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="text-muted" style="font-size:0.8rem">{{ logsTotal }} recent adjustment logs</span>
+      <div class="d-flex align-items-center gap-3">
+        <span class="text-muted" style="font-size:0.78rem">Newest first</span>
+        <div class="d-flex align-items-center gap-2">
+          <span class="text-muted" style="font-size:0.8rem">Rows</span>
+          <select style="width:90px" [(ngModel)]="logsLimit" (ngModelChange)="onLogsLimitChange()">
+            <option [ngValue]="10">10</option>
+            <option [ngValue]="25">25</option>
+            <option [ngValue]="50">50</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table-wz w-100">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Transaction ID</th>
+            <th>User</th>
+            <th>Admin</th>
+            <th>Action</th>
+            <th class="text-end">Credited</th>
+            <th class="text-end">Debited</th>
+            <th class="text-end">Current</th>
+            <th>Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let log of logs; trackBy: trackById"
+              [style.borderLeft]="'4px solid ' + logBorderColor(log)"
+              [style.background]="logBackground(log)">
+            <ng-container *ngIf="parseAdjustment(log) as p">
+              <td>{{ log.timestamp | date:'short' }}</td>
+              <td>
+                <div class="d-flex align-items-center gap-2" *ngIf="p.txId; else noTxId">
+                  <span class="text-muted" style="font-size:0.78rem">{{ shortId(p.txId) }}</span>
+                  <button class="btn btn-sm btn-outline-secondary" (click)="copyText(p.txId)">Copy</button>
+                </div>
+                <ng-template #noTxId>-</ng-template>
+              </td>
+              <td>{{ affectedUserName(log) }}</td>
+              <td>{{ adminName(log) }}</td>
+              <td>
+                <span class="badge me-1" [class.bg-danger]="isNegativeLog(log)" [class.bg-success]="isPositiveLog(log)">
+                  {{ isNegativeLog(log) ? 'Debited' : 'Credited' }}
+                </span>
+              </td>
+              <td class="text-end text-success fw-bold">{{ p.credited ? '+' + p.credited : '-' }}</td>
+              <td class="text-end text-danger fw-bold">{{ p.debited ? '-' + p.debited : '-' }}</td>
+              <td class="text-end fw-bold">{{ p.current !== null ? p.current : '-' }}</td>
+              <td>{{ log.details }}</td>
+            </ng-container>
+          </tr>
+          <tr *ngIf="!logs.length">
+            <td colspan="9" class="text-center text-muted py-4">No points logs found</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div *ngIf="logsPages > 1" class="d-flex justify-content-center align-items-center gap-2 mt-2">
+      <button class="btn-wz-outline btn-sm" [disabled]="logsPage <= 1" (click)="goToLogsPage(logsPage - 1)">Prev</button>
+      <span class="text-muted" style="font-size:0.82rem">Page {{ logsPage }} of {{ logsPages }}</span>
+      <button class="btn-wz-outline btn-sm" [disabled]="logsPage >= logsPages" (click)="goToLogsPage(logsPage + 1)">Next</button>
+    </div>
+  </div>
+</ng-container>

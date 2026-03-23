@@ -11,6 +11,8 @@ export interface User {
   isActive: boolean;
   isSuspended: boolean;
   totalPickupsCompleted: number;
+  rewardPoints?: number;
+  totalPointsEarned?: number;
   wasteStats: WasteStats;
   createdAt: string;
   token?: string;
@@ -72,6 +74,29 @@ export interface OpportunityPage {
   pages: number;
 }
 
+export interface OpportunityMatchMeta {
+  skillMatches: number;
+  totalRequiredSkills: number;
+  locationMatch: boolean;
+  reasons: string[];
+}
+
+export interface MatchedOpportunity extends Opportunity {
+  matchScore: number;
+  matchMeta: OpportunityMatchMeta;
+}
+
+export interface MatchedOpportunityPage {
+  opportunities: MatchedOpportunity[];
+  total: number;
+  page: number;
+  pages: number;
+  profile: {
+    skillsCount: number;
+    location: string;
+  };
+}
+
 export interface Application {
   _id: string;
   opportunity_id: Opportunity | string;
@@ -94,16 +119,44 @@ export interface Pickup {
   title: string;
   user_id: User | string;
   volunteer_id?: User | string | null;
+  requestType?: 'Pickup' | 'IllegalDump';
   wasteType: 'Plastic' | 'Organic' | 'E-Waste' | 'Metal' | 'Paper' | 'Glass' | 'Other';
   description: string;
   estimatedQuantity: string;
   address: string;
   mediaUrl?: string | null;
+  reportImages?: string[];
+  completionProofImages?: string[];
   preferredDate: string;
   preferredTime: string;
   contactDetails: string;
   status: 'Open' | 'Accepted' | 'Completed' | 'Cancelled';
+  adminApprovalStatus?: 'not-required' | 'pending' | 'approved' | 'rejected';
+  approvedAt?: string | null;
+  pointsAwarded?: boolean;
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PointHistoryItem {
+  _id: string;
+  user_id: string;
+  points: number;
+  reason: string;
+  source: 'illegal-dump' | 'pickup' | 'system';
+  pickup_id?: {
+    _id: string;
+    title: string;
+    requestType?: 'Pickup' | 'IllegalDump';
+    address?: string;
+  } | string | null;
+  createdAt: string;
+}
+
+export interface PointHistoryPage {
+  items: PointHistoryItem[];
+  total: number;
+  page: number;
+  pages: number;
 }

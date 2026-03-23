@@ -43,29 +43,58 @@
     <table class="table-wz w-100">
       <thead>
         <tr>
-          <th>Title</th><th>User</th><th>Waste Type</th><th>Address</th>
-          <th>Date</th><th>Status</th><th>Volunteer</th><th>Actions</th>
+          <th>Title</th><th>User</th><th>Type</th><th>Waste Type</th><th>Address</th>
+          <th>Date</th><th>Status</th><th>Approval</th><th>Completion Proof</th><th>Volunteer</th><th>Actions</th>
         </tr>
       </thead>
       <tbody>
         <tr *ngFor="let p of filtered; trackBy: trackById">
           <td style="font-weight:600">{{ p.title }}</td>
           <td>{{ getUser(p) }}</td>
+          <td>
+            <span *ngIf="p.requestType === 'IllegalDump'" class="badge bg-danger-subtle text-danger border">Illegal Dump</span>
+            <span *ngIf="p.requestType !== 'IllegalDump'" class="badge bg-light text-dark border">Pickup</span>
+          </td>
           <td><span class="waste-tag waste-{{p.wasteType}}">{{ p.wasteType }}</span></td>
           <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" [title]="p.address">{{ p.address }}</td>
           <td>{{ p.preferredDate | date:'mediumDate' }}</td>
           <td><span class="badge-{{p.status.toLowerCase()}}">{{ p.status }}</span></td>
+          <td>
+            <span *ngIf="p.adminApprovalStatus === 'approved'" class="badge bg-success">Approved</span>
+            <span *ngIf="p.adminApprovalStatus === 'pending'" class="badge bg-warning text-dark">Pending</span>
+            <span *ngIf="!p.adminApprovalStatus || p.adminApprovalStatus === 'not-required'" class="text-muted">-</span>
+          </td>
+          <td>
+            <div *ngIf="p.requestType === 'IllegalDump' && p.completionProofImages?.length; else noProofBlock" class="d-flex gap-1 flex-wrap">
+              <a *ngFor="let img of p.completionProofImages; trackBy: trackByIndex"
+                 [href]="img"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 title="Open proof image">
+                <img [src]="img" alt="Proof" style="width:34px;height:34px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0" />
+              </a>
+            </div>
+            <ng-template #noProofBlock>
+              <span class="text-muted" style="font-size:0.78rem">{{ p.requestType === 'IllegalDump' ? 'No proof uploaded' : '-' }}</span>
+            </ng-template>
+          </td>
           <td>{{ getVolunteer(p) }}</td>
           <td>
             <div class="d-flex gap-1 flex-wrap">
               <button *ngIf="p.status === 'Accepted'" class="btn btn-sm btn-success" (click)="complete(p._id)" style="font-size:0.72rem">Complete</button>
+              <button *ngIf="p.requestType === 'IllegalDump' && p.status === 'Completed' && p.adminApprovalStatus === 'pending'"
+                      class="btn btn-sm btn-primary"
+                      (click)="approveCompletion(p._id)"
+                      style="font-size:0.72rem">
+                Approve
+              </button>
               <button *ngIf="p.status !== 'Cancelled' && p.status !== 'Completed'" class="btn btn-sm btn-warning" (click)="cancel(p._id)" style="font-size:0.72rem">Cancel</button>
               <button class="btn btn-sm btn-outline-danger" (click)="deletePickup(p._id)" style="font-size:0.72rem"><i class="bi bi-trash"></i></button>
             </div>
           </td>
         </tr>
         <tr *ngIf="!filtered.length">
-          <td colspan="8" class="text-center text-muted py-4">No pickups found</td>
+          <td colspan="11" class="text-center text-muted py-4">No pickups found</td>
         </tr>
       </tbody>
     </table>

@@ -5,6 +5,50 @@ const AdminLog = require('../models/AdminLog');
 const { emitToUser, emitToRoom } = require('../socket');
 const { createNotification } = require('./notificationController');
 
+function normaliseText(value) {
+  return (value || '').toString().trim().toLowerCase();
+}
+
+function toSkillSet(skills = []) {
+  return new Set(
+    (Array.isArray(skills) ? skills : [])
+      .map((s) => normaliseText(s))
+      .filter(Boolean)
+  );
+}
+
+function buildMatchMeta(opportunity, volunteerSkillsSet, volunteerLocation) {
+  const oppSkills = Array.isArray(opportunity.requiredSkills) ? opportunity.requiredSkills : [];
+  const oppSkillSet = toSkillSet(oppSkills);
+
+  let skillMatches = 0;
+  oppSkillSet.forEach((s) => {
+    if (volunteerSkillsSet.has(s)) skillMatches += 1;
+  });
+
+  const skillRatio = oppSkillSet.size ? skillMatches / oppSkillSet.size : 0;
+  const locationText = normaliseText(opportunity.location);
+  const locationMatch =
+    Boolean(volunteerLocation) &&
+    Boolean(locationText) &&
+    (locationText.includes(volunteerLocation) || volunteerLocation.includes(locationText));
+
+  const score = Math.round(skillRatio * 70 + (locationMatch ? 30 : 0));
+
+  const reasons = [];
+  if (skillMatches > 0) reasons.push(`${skillMatches} matching skill${skillMatches > 1 ? 's' : ''}`);
+  if (locationMatch) reasons.push('location match');
+  if (reasons.length === 0) reasons.push('recent nearby opportunity candidate');
+
+  return {
+    score,
+    skillMatches,
+    totalRequiredSkills: oppSkillSet.size,
+    locationMatch,
+    reasons,
+  };
+}
+
 // ── Helper: standard error response ───────────────────────────────────────
 const errorResponse = (res, status, message, details = null) => {
   const body = { error: true, message };
@@ -58,11 +102,134 @@ exports.createOpportunity = async (req, res) => {
     // ── Real-time: broadcast new opportunity to volunteers ──
     try {
       emitToRoom('role:volunteer', 'opportunity:created', populated);
+
+      const volunteers = await User.find({
+        role: 'volunteer',
+        isSuspended: { $ne: true },
+      }).select('_id name skills location').lean();
+
+      const oppLocation = normaliseText(opportunity.location);
+      const oppSkillsSet = toSkillSet(opportunity.requiredSkills);
+
+      await Promise.all(
+        volunteers.map(async (vol) => {
+          const vSkillsSet = toSkillSet(vol.skills || []);
+          let sharedSkills = 0;
+          oppSkillsSet.forEach((s) => {
+            if (vSkillsSet.has(s)) sharedSkills += 1;
+          });
+
+          const vLocation = normaliseText(vol.location);
+          const locationMatch =
+            Boolean(vLocation) &&
+            Boolean(oppLocation) &&
+            (oppLocation.includes(vLocation) || vLocation.includes(oppLocation));
+
+          const isProfileMatch = sharedSkills > 0 || locationMatch;
+
+          await createNotification({
+            user_id: vol._id,
+            type: 'opportunity:created',
+            title: 'New Opportunity Posted',
+            message: `A new opportunity "${opportunity.title}" is now available`,
+            ref_id: opportunity._id,
+            ref_model: 'Opportunity',
+          });
+
+          if (isProfileMatch) {
+            await createNotification({
+              user_id: vol._id,
+              type: 'opportunity:match',
+              title: 'New Opportunity Matches Your Profile',
+              message: `"${opportunity.title}" matches your skills/location`,
+              ref_id: opportunity._id,
+              ref_model: 'Opportunity',
+            });
+
+            emitToUser(vol._id, 'opportunity:match', {
+              opportunityId: opportunity._id,
+              title: opportunity.title,
+            });
+          }
+        })
+      );
     } catch (e) { console.error('Socket emit error:', e.message); }
 
     res.status(201).json(populated);
   } catch (error) {
     console.error('createOpportunity error:', error);
+    return errorResponse(res, 500, error.message || 'Server error');
+  }
+};
+
+// ── GET    Match suggestions for volunteer ───────────────────────────────
+exports.listMatchedOpportunities = async (req, res) => {
+  try {
+    if (req.user.role !== 'volunteer') {
+      return errorResponse(res, 403, 'Only volunteers can access match suggestions');
+    }
+
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(30, Math.max(1, parseInt(req.query.limit) || 8));
+
+    const volunteer = await User.findById(req.user._id)
+      .select('skills location isSuspended')
+      .lean();
+    if (!volunteer || volunteer.isSuspended) {
+      return errorResponse(res, 403, 'Volunteer account is not active');
+    }
+
+    const volunteerSkillsSet = toSkillSet(volunteer.skills || []);
+    const volunteerLocation = normaliseText(volunteer.location);
+
+    const [openOpps, myApps] = await Promise.all([
+      Opportunity.find({ status: 'open', isDeleted: false })
+        .populate('ngo_id', 'name email username')
+        .sort({ createdAt: -1 })
+        .lean(),
+      Application.find({ volunteer_id: req.user._id })
+        .select('opportunity_id')
+        .lean(),
+    ]);
+
+    const appliedOppIds = new Set(myApps.map((a) => a.opportunity_id?.toString()).filter(Boolean));
+
+    const scored = openOpps
+      .filter((opp) => !appliedOppIds.has(opp._id.toString()))
+      .map((opp) => {
+        const match = buildMatchMeta(opp, volunteerSkillsSet, volunteerLocation);
+        return {
+          ...opp,
+          matchScore: match.score,
+          matchMeta: {
+            skillMatches: match.skillMatches,
+            totalRequiredSkills: match.totalRequiredSkills,
+            locationMatch: match.locationMatch,
+            reasons: match.reasons,
+          },
+        };
+      })
+      .sort((a, b) => {
+        if (b.matchScore !== a.matchScore) return b.matchScore - a.matchScore;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+
+    const total = scored.length;
+    const start = (page - 1) * limit;
+    const opportunities = scored.slice(start, start + limit);
+
+    res.json({
+      opportunities,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+      profile: {
+        skillsCount: volunteerSkillsSet.size,
+        location: volunteer.location || '',
+      },
+    });
+  } catch (error) {
+    console.error('listMatchedOpportunities error:', error);
     return errorResponse(res, 500, error.message || 'Server error');
   }
 };

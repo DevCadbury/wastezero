@@ -58,6 +58,14 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  rewardPoints: {
+    type: Number,
+    default: 0,
+  },
+  totalPointsEarned: {
+    type: Number,
+    default: 0,
+  },
   wasteStats: {
     plastic: { type: Number, default: 0 },
     organic: { type: Number, default: 0 },

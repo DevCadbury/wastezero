@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Pickup = require('../models/Pickup');
 const AdminLog = require('../models/AdminLog');
+const PointTransaction = require('../models/PointTransaction');
+const { emitToUser } = require('../socket');
 const { protect, adminOnly } = require('../middleware/auth');
 
 // GET /api/admin/stats - Platform overview stats
@@ -125,6 +128,55 @@ router.get('/reports/pickups', protect, adminOnly, async (req, res) => {
   }
 });
 
+// GET /api/admin/reports/illegal-dumps - Full illegal dump audit trail with proofs and points
+router.get('/reports/illegal-dumps', protect, adminOnly, async (req, res) => {
+  try {
+    const dumps = await Pickup.find({ requestType: 'IllegalDump' })
+      .populate('user_id', 'name email username')
+      .populate('volunteer_id', 'name email username')
+      .populate('approvedBy', 'name username')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const pickupIds = dumps.map((d) => d._id);
+
+    const [pickupLogs, pointTransactions] = await Promise.all([
+      AdminLog.find({ pickup_id: { $in: pickupIds } })
+        .populate('performedBy', 'name username role')
+        .sort({ timestamp: 1 })
+        .lean(),
+      PointTransaction.find({ pickup_id: { $in: pickupIds } })
+        .populate('user_id', 'name email username role')
+        .sort({ createdAt: 1 })
+        .lean(),
+    ]);
+
+    const logsByPickup = new Map();
+    pickupLogs.forEach((log) => {
+      const key = String(log.pickup_id);
+      if (!logsByPickup.has(key)) logsByPickup.set(key, []);
+      logsByPickup.get(key).push(log);
+    });
+
+    const pointsByPickup = new Map();
+    pointTransactions.forEach((tx) => {
+      const key = String(tx.pickup_id);
+      if (!pointsByPickup.has(key)) pointsByPickup.set(key, []);
+      pointsByPickup.get(key).push(tx);
+    });
+
+    const data = dumps.map((d) => ({
+      ...d,
+      auditLogs: logsByPickup.get(String(d._id)) || [],
+      pointTransactions: pointsByPickup.get(String(d._id)) || [],
+    }));
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // GET /api/admin/reports/waste - Waste stats
 router.get('/reports/waste', protect, adminOnly, async (req, res) => {
   try {
@@ -188,13 +240,298 @@ router.get('/reports/volunteers', protect, adminOnly, async (req, res) => {
 router.get('/logs', protect, adminOnly, async (req, res) => {
   try {
     const limit = Math.min(200, parseInt(req.query.limit) || 100);
-    const logs = await AdminLog.find()
+    const action = (req.query.action || '').toString().trim();
+    const search = (req.query.search || '').toString().trim();
+    const from = (req.query.from || '').toString().trim();
+    const to = (req.query.to || '').toString().trim();
+
+    const query = {};
+    if (action) query.action = action;
+    if (search) {
+      query.$or = [
+        { details: { $regex: search, $options: 'i' } },
+      ];
+    }
+    if (from || to) {
+      query.timestamp = {};
+      if (from) {
+        const d = new Date(from);
+        if (!Number.isNaN(d.getTime())) query.timestamp.$gte = d;
+      }
+      if (to) {
+        const d = new Date(to);
+        if (!Number.isNaN(d.getTime())) {
+          d.setHours(23, 59, 59, 999);
+          query.timestamp.$lte = d;
+        }
+      }
+      if (!Object.keys(query.timestamp).length) delete query.timestamp;
+    }
+
+    const logs = await AdminLog.find(query)
       .populate('user_id', 'name username role')
       .populate('performedBy', 'name username')
       .sort({ timestamp: -1 })
       .limit(limit)
       .lean();
     res.json(logs);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/admin/points/users - list users with points for admin correction UI
+router.get('/points/users', protect, adminOnly, async (req, res) => {
+  try {
+    const users = await User.find({ role: { $in: ['user', 'volunteer'] } })
+      .select('name email role rewardPoints totalPointsEarned isSuspended')
+      .sort({ rewardPoints: -1, createdAt: -1 })
+      .lean();
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/admin/points/users/:id/history - points transactions for a specific user
+router.get('/points/users/:id/history', protect, adminOnly, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('name email role rewardPoints totalPointsEarned').lean();
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.role === 'admin') return res.status(400).json({ message: 'Admin accounts do not use points' });
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * limit;
+
+    const search = (req.query.search || '').toString().trim();
+    const source = (req.query.source || '').toString().trim();
+    const from = (req.query.from || '').toString().trim();
+    const to = (req.query.to || '').toString().trim();
+
+    const query = { user_id: user._id };
+    if (search) {
+      const or = [
+        { reason: { $regex: search, $options: 'i' } },
+      ];
+      if (mongoose.Types.ObjectId.isValid(search)) {
+        or.push({ _id: new mongoose.Types.ObjectId(search) });
+      }
+      query.$or = or;
+    }
+    if (source) {
+      query.source = source;
+    }
+    if (from || to) {
+      query.createdAt = {};
+      if (from) {
+        const d = new Date(from);
+        if (!Number.isNaN(d.getTime())) query.createdAt.$gte = d;
+      }
+      if (to) {
+        const d = new Date(to);
+        if (!Number.isNaN(d.getTime())) {
+          d.setHours(23, 59, 59, 999);
+          query.createdAt.$lte = d;
+        }
+      }
+      if (!Object.keys(query.createdAt).length) delete query.createdAt;
+    }
+
+    const [items, total] = await Promise.all([
+      PointTransaction.find(query)
+        .populate('pickup_id', 'title requestType address')
+        .populate('performedBy', 'name username email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      PointTransaction.countDocuments(query),
+    ]);
+
+    // Build balance-after map from full user ledger so each row can show current at that transaction.
+    const allUserTx = await PointTransaction.find({ user_id: user._id })
+      .select('_id points balanceAfter')
+      .sort({ createdAt: -1, _id: -1 })
+      .lean();
+
+    const balanceAfterById = new Map();
+    let cursor = Number(user.rewardPoints || 0);
+    allUserTx.forEach((tx) => {
+      const txId = String(tx._id);
+      const storedBalance = Number.isFinite(tx.balanceAfter) ? tx.balanceAfter : null;
+      const balanceAtThisTx = storedBalance ?? cursor;
+      balanceAfterById.set(txId, balanceAtThisTx);
+      cursor = balanceAtThisTx - Number(tx.points || 0);
+    });
+
+    const enrichedItems = items.map((tx) => ({
+      ...tx,
+      balanceAfter: balanceAfterById.has(String(tx._id))
+        ? balanceAfterById.get(String(tx._id))
+        : (Number.isFinite(tx.balanceAfter) ? tx.balanceAfter : null),
+    }));
+
+    res.json({
+      user,
+      items: enrichedItems,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+      limit,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/admin/points/logs - recent points adjustment logs with pagination
+router.get('/points/logs', protect, adminOnly, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const skip = (page - 1) * limit;
+
+    const search = (req.query.search || '').toString().trim();
+    const from = (req.query.from || '').toString().trim();
+    const to = (req.query.to || '').toString().trim();
+    const recentDays = Math.max(1, parseInt(req.query.recentDays, 10) || 30);
+
+    const query = { action: 'POINTS_ADJUSTED' };
+
+    if (from || to) {
+      query.timestamp = {};
+      if (from) {
+        const d = new Date(from);
+        if (!Number.isNaN(d.getTime())) query.timestamp.$gte = d;
+      }
+      if (to) {
+        const d = new Date(to);
+        if (!Number.isNaN(d.getTime())) {
+          d.setHours(23, 59, 59, 999);
+          query.timestamp.$lte = d;
+        }
+      }
+      if (!Object.keys(query.timestamp).length) delete query.timestamp;
+    } else {
+      const d = new Date();
+      d.setDate(d.getDate() - recentDays);
+      query.timestamp = { $gte: d };
+    }
+
+    if (search) {
+      const matchingUsers = await User.find({
+        $or: [
+          { name: { $regex: search, $options: 'i' } },
+          { username: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+        ],
+      }).select('_id').lean();
+
+      const userIds = matchingUsers.map((u) => u._id);
+
+      query.$or = [
+        { details: { $regex: search, $options: 'i' } },
+      ];
+      if (userIds.length) {
+        query.$or.push({ user_id: { $in: userIds } });
+        query.$or.push({ performedBy: { $in: userIds } });
+      }
+    }
+
+    const [items, total] = await Promise.all([
+      AdminLog.find(query)
+        .populate('user_id', 'name username role email')
+        .populate('performedBy', 'name username email')
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      AdminLog.countDocuments(query),
+    ]);
+
+    res.json({
+      items,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+      limit,
+      recentDaysApplied: from || to ? null : recentDays,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// PUT /api/admin/points/users/:id/adjust - manual points correction
+router.put('/points/users/:id/adjust', protect, adminOnly, async (req, res) => {
+  try {
+    const rawDelta = Number(req.body?.delta);
+    const reason = (req.body?.reason || '').toString().trim();
+
+    if (!Number.isFinite(rawDelta) || rawDelta === 0) {
+      return res.status(400).json({ message: 'A non-zero numeric delta is required' });
+    }
+    if (!reason) {
+      return res.status(400).json({ message: 'Reason is required for points adjustment' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    if (user.role === 'admin') {
+      return res.status(400).json({ message: 'Admin accounts do not use points' });
+    }
+
+    let appliedDelta = Math.trunc(rawDelta);
+    if (appliedDelta < 0 && (user.rewardPoints || 0) + appliedDelta < 0) {
+      appliedDelta = -(user.rewardPoints || 0);
+    }
+    if (appliedDelta === 0) {
+      return res.status(400).json({ message: 'User has no points left to deduct' });
+    }
+
+    const beforePoints = user.rewardPoints || 0;
+    const beforeTotalEarned = user.totalPointsEarned || 0;
+
+    user.rewardPoints = beforePoints + appliedDelta;
+    if (appliedDelta > 0) {
+      user.totalPointsEarned = beforeTotalEarned + appliedDelta;
+    }
+    await user.save();
+
+    const tx = await PointTransaction.create({
+      user_id: user._id,
+      points: appliedDelta,
+      reason: `Admin adjustment: ${reason}`,
+      source: 'system',
+      performedBy: req.user._id,
+      balanceAfter: user.rewardPoints,
+    });
+
+    await AdminLog.create({
+      action: 'POINTS_ADJUSTED',
+      user_id: user._id,
+      performedBy: req.user._id,
+      details: `Adjusted ${user.name} points by ${appliedDelta}. Before=${beforePoints}, After=${user.rewardPoints}, TotalEarnedBefore=${beforeTotalEarned}, TotalEarnedAfter=${user.totalPointsEarned}. TxID=${tx._id}. Reason: ${reason}`,
+    });
+
+    emitToUser(user._id, 'points:updated', {
+      points: user.rewardPoints,
+      delta: appliedDelta,
+      source: 'system',
+      reason: `Admin adjustment: ${reason}`,
+    });
+
+    res.json({
+      message: 'Points adjusted successfully',
+      user: {
+        _id: user._id,
+        name: user.name,
+        rewardPoints: user.rewardPoints,
+        totalPointsEarned: user.totalPointsEarned,
+      },
+      appliedDelta,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

@@ -6,7 +6,7 @@ import { OpportunityService } from '../../services/opportunity.service';
 import { ApplicationService } from '../../services/application.service';
 import { AuthService } from '../../services/auth.service';
 import { SocketService } from '../../services/socket.service';
-import { Opportunity, Application } from '../../models/models';
+import { Opportunity, Application, MatchedOpportunity } from '../../models/models';
 import { Subscription } from 'rxjs';
 import { BannerService, Banner } from '../../services/banner.service';
 
@@ -19,10 +19,13 @@ import { BannerService, Banner } from '../../services/banner.service';
 })
 export class OpportunitiesComponent implements OnInit, OnDestroy {
   opportunities: Opportunity[] = [];
+  matchedOpportunities: MatchedOpportunity[] = [];
   myApplications: Map<string, Application> = new Map();
   loading = true;
+  loadingMatches = false;
   successMsg = '';
   errorMsg = '';
+  matchErrorMsg = '';
 
   filterLocation = '';
   filterSkills = '';
@@ -51,6 +54,7 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
     this.load();
     if (this.auth.userRole === 'volunteer') {
       this.loadMyApplications();
+      this.loadMatches();
     }
 
     // Real-time: refresh on opportunity changes
@@ -61,7 +65,9 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
       // Refresh application status when decision arrives
       this.socketService.on('application:updated').subscribe(() => {
         this.loadMyApplications();
+        this.loadMatches();
       }),
+      this.socketService.on('opportunity:match').subscribe(() => this.loadMatches()),
     );
   }
 
@@ -94,6 +100,27 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
           this.cdr.markForCheck();
         },
       });
+  }
+
+  loadMatches() {
+    if (this.auth.userRole !== 'volunteer') return;
+
+    this.loadingMatches = true;
+    this.matchErrorMsg = '';
+
+    this.oppService.listMatches({ page: 1, limit: 6 }).subscribe({
+      next: (data) => {
+        this.matchedOpportunities = data.opportunities || [];
+        this.loadingMatches = false;
+        this.cdr.markForCheck();
+      },
+      error: (err) => {
+        this.matchErrorMsg = err.error?.message || 'Failed to load recommendations';
+        this.matchedOpportunities = [];
+        this.loadingMatches = false;
+        this.cdr.markForCheck();
+      },
+    });
   }
 
   loadBanners() {
@@ -158,6 +185,7 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
       next: (app) => {
         this.successMsg = 'Application submitted successfully!';
         this.myApplications.set(oppId, app);
+        this.matchedOpportunities = this.matchedOpportunities.filter((o) => o._id !== oppId);
         this.applyingId = null;
         this.cdr.markForCheck();
         setTimeout(() => { this.successMsg = ''; this.cdr.markForCheck(); }, 4000);
@@ -178,6 +206,12 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
     return this.myApplications.get(oppId)?.status || '';
   }
 
+  scoreClass(score: number): string {
+    if (score >= 75) return 'bg-success text-white';
+    if (score >= 45) return 'bg-warning text-dark';
+    return 'bg-secondary text-white';
+  }
+
   openDetail(opp: Opportunity) { this.selectedOpp = opp; }
   closeDetail() { this.selectedOpp = null; }
 
@@ -189,4 +223,5 @@ export class OpportunitiesComponent implements OnInit, OnDestroy {
   }
 
   trackById(_: number, item: any): string { return item?._id || _; }
+  trackByIndex(index: number): number { return index; }
 }

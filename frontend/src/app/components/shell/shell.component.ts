@@ -6,7 +6,8 @@ import { AuthService } from '../../services/auth.service';
 import { NotificationService, Notification } from '../../services/notification.service';
 import { SearchService, SearchResult } from '../../services/search.service';
 import { SocketService } from '../../services/socket.service';
-import { User } from '../../models/models';
+import { UserService } from '../../services/user.service';
+import { PointHistoryItem, User } from '../../models/models';
 import { filter, Subscription } from 'rxjs';
 
 @Component({
@@ -27,6 +28,11 @@ export class ShellComponent implements OnInit, OnDestroy {
   unreadCount = 0;
   showNotifDropdown = false;
 
+  // Points
+  showPointsDropdown = false;
+  pointsHistory: PointHistoryItem[] = [];
+  pointsHistoryLoading = false;
+
   // Search
   searchQuery = '';
   searchResults: SearchResult[] = [];
@@ -42,6 +48,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     private notifService: NotificationService,
     private searchService: SearchService,
     private socketService: SocketService,
+    private userService: UserService,
   ) {
     this.darkMode = localStorage.getItem('wz-dark') === '1';
     document.body.classList.toggle('dark-mode', this.darkMode);
@@ -92,6 +99,15 @@ export class ShellComponent implements OnInit, OnDestroy {
         this.searchLoading = false;
         this.cdr.markForCheck();
       }),
+      this.socketService.on('points:updated').subscribe(() => {
+        this.userService.getProfile().subscribe({
+          next: (profile) => {
+            this.auth.updateCurrentUser(profile);
+            this.cdr.markForCheck();
+          },
+          error: () => {},
+        });
+      }),
     );
   }
 
@@ -121,6 +137,10 @@ export class ShellComponent implements OnInit, OnDestroy {
     return this.currentRoute.startsWith(route);
   }
 
+  isIllegalDumpRoute(): boolean {
+    return this.currentRoute.startsWith('/schedule-pickup') && this.currentRoute.includes('mode=illegal-dump');
+  }
+
   toggleDark() {
     this.darkMode = !this.darkMode;
     document.body.classList.toggle('dark-mode', this.darkMode);
@@ -132,6 +152,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   toggleNotifDropdown(event: Event) {
     event.stopPropagation();
     this.showNotifDropdown = !this.showNotifDropdown;
+    this.showPointsDropdown = false;
     this.showSearchResults = false;
     if (this.showNotifDropdown) {
       this.notifService.loadNotifications({ limit: 15 }).subscribe();
@@ -161,6 +182,49 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   markAllRead() {
     this.notifService.markAllAsRead().subscribe();
+  }
+
+  // ── Points ──────────────────────────────────────────────────────────────
+  togglePointsDropdown(event: Event) {
+    event.stopPropagation();
+    this.showPointsDropdown = !this.showPointsDropdown;
+    this.showNotifDropdown = false;
+    this.showSearchResults = false;
+
+    if (this.showPointsDropdown) {
+      this.loadPointsHistoryPreview();
+    }
+    this.cdr.markForCheck();
+  }
+
+  loadPointsHistoryPreview() {
+    this.pointsHistoryLoading = true;
+    this.userService.getPointsHistory({ page: 1, limit: 6 }).subscribe({
+      next: (res) => {
+        this.pointsHistory = res.items || [];
+        this.pointsHistoryLoading = false;
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.pointsHistory = [];
+        this.pointsHistoryLoading = false;
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
+  openPointsPage() {
+    this.showPointsDropdown = false;
+    this.router.navigate(['/my-points']);
+  }
+
+  formatPoints(points: number): string {
+    if (points > 0) return `+${points}`;
+    return `${points}`;
+  }
+
+  pointsClass(points: number): string {
+    return points >= 0 ? 'text-success' : 'text-danger';
   }
 
   // ── Search ──────────────────────────────────────────────────────────────
@@ -221,6 +285,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: Event) {
     this.showNotifDropdown = false;
+    this.showPointsDropdown = false;
     this.showSearchResults = false;
     this.cdr.markForCheck();
   }

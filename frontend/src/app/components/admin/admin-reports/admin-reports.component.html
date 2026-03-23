@@ -5,7 +5,7 @@
 
 <!-- Report tabs -->
 <div class="d-flex gap-2 mb-4 flex-wrap">
-  <button *ngFor="let tab of [{id:'users',label:'Users',icon:'bi-people'},{id:'pickups',label:'Pickups',icon:'bi-truck'},{id:'waste',label:'Waste',icon:'bi-recycle'},{id:'volunteers',label:'Volunteers',icon:'bi-person-badge'},{id:'logs',label:'Activity Logs',icon:'bi-activity'}]; trackBy: trackByIndex"
+  <button *ngFor="let tab of [{id:'users',label:'Users',icon:'bi-people'},{id:'pickups',label:'Pickups',icon:'bi-truck'},{id:'illegal-dumps',label:'Illegal Dump Audit',icon:'bi-exclamation-triangle'},{id:'waste',label:'Waste',icon:'bi-recycle'},{id:'volunteers',label:'Volunteers',icon:'bi-person-badge'},{id:'logs',label:'Activity Logs',icon:'bi-activity'}]; trackBy: trackByIndex"
     class="btn rounded-pill"
     [class.btn-success]="activeReport === tab.id"
     [class.btn-outline-secondary]="activeReport !== tab.id"
@@ -20,20 +20,29 @@
 <ng-container *ngIf="activeReport === 'users' && !loading">
   <div class="card-wz">
     <div class="card-wz-header">
-      <h5>User Report ({{ usersData.length }} users)</h5>
+      <h5>User Report ({{ filteredUsersData.length }} users)</h5>
       <button class="btn-wz-primary btn-sm" (click)="exportCSV('users')"><i class="bi bi-download me-1"></i>Export CSV</button>
+    </div>
+    <div class="row g-2 form-wz mb-2">
+      <div class="col-md-5 form-group mb-0">
+        <label>Search Users</label>
+        <input type="text" [(ngModel)]="usersSearch" placeholder="Name, email, role, location..." />
+      </div>
     </div>
     <div class="table-responsive">
       <table class="table-wz w-100">
         <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Location</th><th>Joined</th><th>Status</th></tr></thead>
         <tbody>
-          <tr *ngFor="let u of usersData; trackBy: trackById">
+          <tr *ngFor="let u of filteredUsersData; trackBy: trackById">
             <td class="fw-semibold">{{ u.name }}</td>
             <td>{{ u.email }}</td>
             <td><span class="badge" [class.bg-success]="u.role==='volunteer'" [class.bg-primary]="u.role==='user'" [class.bg-danger]="u.role==='admin'">{{ u.role }}</span></td>
             <td>{{ u.location || '-' }}</td>
             <td>{{ u.createdAt | date:'mediumDate' }}</td>
             <td><span [class.badge-completed]="!u.isSuspended" [class.badge-cancelled]="u.isSuspended">{{ u.isSuspended ? 'Suspended' : 'Active' }}</span></td>
+          </tr>
+          <tr *ngIf="!filteredUsersData.length">
+            <td colspan="6" class="text-center text-muted py-4">No users found</td>
           </tr>
         </tbody>
       </table>
@@ -45,14 +54,41 @@
 <ng-container *ngIf="activeReport === 'pickups' && !loading">
   <div class="card-wz">
     <div class="card-wz-header">
-      <h5>Pickup Report ({{ pickupsData.length }} pickups)</h5>
+      <h5>Pickup Report ({{ filteredPickupsData.length }} pickups)</h5>
       <button class="btn-wz-primary btn-sm" (click)="exportCSV('pickups')"><i class="bi bi-download me-1"></i>Export CSV</button>
+    </div>
+    <div class="row g-2 form-wz mb-2">
+      <div class="col-md-4 form-group mb-0">
+        <label>Search Pickups</label>
+        <input type="text" [(ngModel)]="pickupsSearch" placeholder="Title, user, address..." />
+      </div>
+      <div class="col-md-3 form-group mb-0">
+        <label>Status</label>
+        <select [(ngModel)]="pickupStatusFilter">
+          <option value="">All</option>
+          <option value="Open">Open</option>
+          <option value="Accepted">Accepted</option>
+          <option value="Completed">Completed</option>
+          <option value="Cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="col-md-3 form-group mb-0">
+        <label>Type</label>
+        <select [(ngModel)]="pickupTypeFilter">
+          <option value="">All</option>
+          <option value="Pickup">Pickup</option>
+          <option value="IllegalDump">IllegalDump</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn-wz-outline w-100" (click)="pickupsSearch=''; pickupStatusFilter=''; pickupTypeFilter=''">Clear</button>
+      </div>
     </div>
     <div class="table-responsive">
       <table class="table-wz w-100">
         <thead><tr><th>Title</th><th>User</th><th>Waste Type</th><th>Date</th><th>Status</th><th>Volunteer</th></tr></thead>
         <tbody>
-          <tr *ngFor="let p of pickupsData; trackBy: trackById">
+          <tr *ngFor="let p of filteredPickupsData; trackBy: trackById">
             <td class="fw-semibold">{{ p.title }}</td>
             <td>{{ getUser(p) }}</td>
             <td><span class="waste-tag waste-{{p.wasteType}}">{{ p.wasteType }}</span></td>
@@ -60,9 +96,117 @@
             <td><span class="badge-{{p.status.toLowerCase()}}">{{ p.status }}</span></td>
             <td>{{ getVolunteer(p) }}</td>
           </tr>
+          <tr *ngIf="!filteredPickupsData.length">
+            <td colspan="6" class="text-center text-muted py-4">No pickups found</td>
+          </tr>
         </tbody>
       </table>
     </div>
+  </div>
+</ng-container>
+
+<!-- Illegal Dump Audit Report -->
+<ng-container *ngIf="activeReport === 'illegal-dumps' && !loading">
+  <div class="card-wz mb-3">
+    <div class="card-wz-header">
+      <h5>Illegal Dump Audit ({{ filteredIllegalDumpData.length }} reports)</h5>
+      <span class="text-muted" style="font-size:0.82rem">Includes proofs, point transactions, and action timeline.</span>
+    </div>
+    <div class="row g-2 form-wz mt-1">
+      <div class="col-md-5 form-group mb-0">
+        <label>Search Reports</label>
+        <input type="text" [(ngModel)]="illegalDumpSearch" placeholder="Title, address, reporter, volunteer..." />
+      </div>
+      <div class="col-md-3 form-group mb-0">
+        <label>Approval</label>
+        <select [(ngModel)]="illegalDumpApprovalFilter">
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="not-required">Not Required</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn-wz-outline w-100" (click)="illegalDumpSearch=''; illegalDumpApprovalFilter=''">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-wz mb-3" *ngFor="let d of filteredIllegalDumpData; trackBy: trackById">
+    <div class="d-flex flex-wrap justify-content-between gap-2 mb-2">
+      <div>
+        <h6 class="fw-bold mb-1">{{ d.title }}</h6>
+        <div class="text-muted" style="font-size:0.82rem">
+          Reporter: <strong>{{ d.user_id?.name || '-' }}</strong>
+          <span class="mx-2">|</span>
+          Volunteer: <strong>{{ d.volunteer_id?.name || 'Unassigned' }}</strong>
+          <span class="mx-2">|</span>
+          Status: <span class="badge-{{ (d.status || 'open').toLowerCase() }}">{{ d.status }}</span>
+          <span class="mx-2">|</span>
+          Approval: <span class="badge" [class.bg-success]="d.adminApprovalStatus==='approved'" [class.bg-warning]="d.adminApprovalStatus==='pending'">{{ d.adminApprovalStatus || 'not-required' }}</span>
+        </div>
+      </div>
+      <div class="text-muted" style="font-size:0.78rem;text-align:right">
+        <div>Created: {{ d.createdAt | date:'short' }}</div>
+        <div *ngIf="d.completedAt">Completed: {{ d.completedAt | date:'short' }}</div>
+        <div *ngIf="d.approvedAt">Approved: {{ d.approvedAt | date:'short' }}</div>
+      </div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="p-2 border rounded">
+          <div class="fw-semibold mb-2" style="font-size:0.84rem">Report Proofs</div>
+          <div *ngIf="d.reportImages?.length; else noReportProof" class="d-flex gap-2 flex-wrap">
+            <a *ngFor="let img of d.reportImages; trackBy: trackByIndex" [href]="img" target="_blank" rel="noopener noreferrer">
+              <img [src]="img" alt="Report proof" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0" />
+            </a>
+          </div>
+          <ng-template #noReportProof>
+            <div class="text-muted" style="font-size:0.78rem">No report proofs</div>
+          </ng-template>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="p-2 border rounded">
+          <div class="fw-semibold mb-2" style="font-size:0.84rem">Completion Proofs</div>
+          <div *ngIf="d.completionProofImages?.length; else noCompletionProof" class="d-flex gap-2 flex-wrap">
+            <a *ngFor="let img of d.completionProofImages; trackBy: trackByIndex" [href]="img" target="_blank" rel="noopener noreferrer">
+              <img [src]="img" alt="Completion proof" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0" />
+            </a>
+          </div>
+          <ng-template #noCompletionProof>
+            <div class="text-muted" style="font-size:0.78rem">No completion proofs</div>
+          </ng-template>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-3 p-2 border rounded" style="background:#f8fafc">
+      <div class="fw-semibold mb-2" style="font-size:0.84rem">Points Transactions (Total: {{ totalPointsForDump(d) }})</div>
+      <div *ngIf="!d.pointTransactions?.length" class="text-muted" style="font-size:0.78rem">No points posted for this report yet</div>
+      <div *ngFor="let tx of d.pointTransactions; trackBy: trackById" class="d-flex justify-content-between align-items-center" style="font-size:0.8rem;padding:4px 0;border-bottom:1px dashed #e5e7eb">
+        <span>{{ txUserName(tx) }} - {{ tx.reason }}</span>
+        <span style="font-weight:700;color:#166534">+{{ tx.points }}</span>
+      </div>
+    </div>
+
+    <div class="mt-3 p-2 border rounded">
+      <div class="fw-semibold mb-2" style="font-size:0.84rem">Action Timeline</div>
+      <div *ngIf="!d.auditLogs?.length" class="text-muted" style="font-size:0.78rem">No audit logs for this report yet</div>
+      <div *ngFor="let log of d.auditLogs; trackBy: trackById" style="font-size:0.8rem;padding:4px 0;border-bottom:1px dashed #e5e7eb">
+        <div class="d-flex justify-content-between">
+          <span><span class="badge bg-secondary me-1" style="font-size:0.68rem">{{ log.action }}</span> {{ log.details }}</span>
+          <span class="text-muted">{{ log.timestamp | date:'short' }}</span>
+        </div>
+        <div class="text-muted" style="font-size:0.74rem">Performed By: {{ performedByName(log) }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div *ngIf="!filteredIllegalDumpData.length" class="card-wz text-center text-muted py-4">
+    No illegal dump reports found.
   </div>
 </ng-container>
 
@@ -109,14 +253,20 @@
 <ng-container *ngIf="activeReport === 'volunteers' && !loading">
   <div class="card-wz">
     <div class="card-wz-header">
-      <h5>Volunteer Report ({{ volunteersData.length }} volunteers)</h5>
+      <h5>Volunteer Report ({{ filteredVolunteersData.length }} volunteers)</h5>
       <button class="btn-wz-primary btn-sm" (click)="exportCSV('volunteers')"><i class="bi bi-download me-1"></i>Export CSV</button>
+    </div>
+    <div class="row g-2 form-wz mb-2">
+      <div class="col-md-5 form-group mb-0">
+        <label>Search Volunteers</label>
+        <input type="text" [(ngModel)]="volunteersSearch" placeholder="Name, email, location..." />
+      </div>
     </div>
     <div class="table-responsive">
       <table class="table-wz w-100">
         <thead><tr><th>Name</th><th>Email</th><th>Location</th><th>Accepted</th><th>Completed</th><th>Total Done</th></tr></thead>
         <tbody>
-          <tr *ngFor="let v of volunteersData; trackBy: trackById">
+          <tr *ngFor="let v of filteredVolunteersData; trackBy: trackById">
             <td class="fw-semibold">{{ v.name }}</td>
             <td>{{ v.email }}</td>
             <td>{{ v.location || '-' }}</td>
@@ -124,7 +274,7 @@
             <td>{{ v.completedPickups }}</td>
             <td><strong>{{ v.totalPickupsCompleted || 0 }}</strong></td>
           </tr>
-          <tr *ngIf="!volunteersData.length">
+          <tr *ngIf="!filteredVolunteersData.length">
             <td colspan="6" class="text-center text-muted">No volunteers found</td>
           </tr>
         </tbody>
@@ -137,6 +287,28 @@
 <ng-container *ngIf="activeReport === 'logs' && !loading">
   <div class="card-wz">
     <div class="card-wz-header"><h5>Activity Logs (Last 100)</h5></div>
+    <div class="row g-2 form-wz mb-2">
+      <div class="col-md-3 form-group mb-0">
+        <label>Search</label>
+        <input type="text" [(ngModel)]="logsSearch" placeholder="Details text..." />
+      </div>
+      <div class="col-md-3 form-group mb-0">
+        <label>Action</label>
+        <input type="text" [(ngModel)]="logsAction" placeholder="e.g. POINTS_ADJUSTED" />
+      </div>
+      <div class="col-md-2 form-group mb-0">
+        <label>From</label>
+        <input type="date" [(ngModel)]="logsFrom" />
+      </div>
+      <div class="col-md-2 form-group mb-0">
+        <label>To</label>
+        <input type="date" [(ngModel)]="logsTo" />
+      </div>
+      <div class="col-md-2 d-flex align-items-end gap-2">
+        <button class="btn-wz-primary" (click)="applyLogFilters()">Apply</button>
+        <button class="btn-wz-outline" (click)="clearLogFilters()">Clear</button>
+      </div>
+    </div>
     <div class="table-responsive">
       <table class="table-wz w-100">
         <thead><tr><th>Action</th><th>User</th><th>Details</th><th>Timestamp</th></tr></thead>

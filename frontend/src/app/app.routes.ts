@@ -58,6 +58,10 @@ export const routes: Routes = [
         loadComponent: () => import('./components/my-impact/my-impact.component').then(m => m.MyImpactComponent),
       },
       {
+        path: 'my-points',
+        loadComponent: () => import('./components/my-points/my-points.component').then(m => m.MyPointsComponent),
+      },
+      {
         path: 'admin/panel',
         canActivate: [authGuard],
         data: { roles: ['admin'] },
@@ -68,6 +72,12 @@ export const routes: Routes = [
         canActivate: [authGuard],
         data: { roles: ['admin'] },
         loadComponent: () => import('./components/admin/admin-users/admin-users.component').then(m => m.AdminUsersComponent),
+      },
+      {
+        path: 'admin/points',
+        canActivate: [authGuard],
+        data: { roles: ['admin'] },
+        loadComponent: () => import('./components/admin/admin-points/admin-points.component').then(m => m.AdminPointsComponent),
       },
       {
         path: 'admin/pickups',

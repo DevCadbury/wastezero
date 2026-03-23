@@ -8,7 +8,28 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const allowedFormats = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'pdf', 'doc', 'docx', 'txt'];
+const allowedFormats = [
+  'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'heic', 'heif',
+  'mp4', 'mov', 'webm',
+  'pdf', 'doc', 'docx', 'txt',
+];
+
+const allowedMimeTypes = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+]);
 
 const storage = new CloudinaryStorage({
   cloudinary,
@@ -24,9 +45,15 @@ const upload = multer({
   storage,
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
   fileFilter: (req, file, cb) => {
-    const ext = file.originalname.split('.').pop().toLowerCase();
-    if (allowedFormats.includes(ext)) return cb(null, true);
-    cb(new Error('File type not allowed'));
+    const original = (file.originalname || '').toLowerCase();
+    const ext = original.includes('.') ? original.split('.').pop() : '';
+    const byExt = !!ext && allowedFormats.includes(ext);
+    const byMime = allowedMimeTypes.has((file.mimetype || '').toLowerCase());
+
+    // Some clients send filenames without extensions (for example, "blob").
+    if (byMime || byExt) return cb(null, true);
+
+    cb(new Error(`File type not allowed: ${file.mimetype || 'unknown'}`));
   },
 });
 

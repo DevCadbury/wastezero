@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const Pickup = require('../models/Pickup');
+const PointTransaction = require('../models/PointTransaction');
 const { protect } = require('../middleware/auth');
 
 // GET /api/users/profile - Get own profile
@@ -79,6 +80,48 @@ router.get('/stats', protect, async (req, res) => {
     } else {
       res.status(403).json({ message: 'Use admin stats endpoint' });
     }
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/users/points/summary - Current points and lifetime totals
+router.get('/points/summary', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('rewardPoints totalPointsEarned');
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({
+      rewardPoints: user.rewardPoints || 0,
+      totalPointsEarned: user.totalPointsEarned || 0,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// GET /api/users/points/history - Points ledger for current user
+router.get('/points/history', protect, async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const skip = (page - 1) * limit;
+
+    const [items, total] = await Promise.all([
+      PointTransaction.find({ user_id: req.user._id })
+        .populate('pickup_id', 'title requestType address')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      PointTransaction.countDocuments({ user_id: req.user._id }),
+    ]);
+
+    res.json({
+      items,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 1,
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
   }

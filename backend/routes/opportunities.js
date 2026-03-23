@@ -12,6 +12,9 @@ router.post('/', adminOnly, ctrl.createOpportunity);
 // GET    /api/opportunities          — List opportunities (role-aware)
 router.get('/', ctrl.listOpportunities);
 
+// GET    /api/opportunities/matches  — Volunteer profile-based suggestions
+router.get('/matches', ctrl.listMatchedOpportunities);
+
 // GET    /api/opportunities/:id      — Get single opportunity
 router.get('/:id', ctrl.getOpportunity);
 

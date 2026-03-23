@@ -13,6 +13,8 @@ const notificationSchema = new mongoose.Schema({
       'application:created',
       'application:accepted',
       'application:rejected',
+      'opportunity:created',
+      'opportunity:match',
       'opportunity:updated',
       'opportunity:deleted',
       'chat:message',

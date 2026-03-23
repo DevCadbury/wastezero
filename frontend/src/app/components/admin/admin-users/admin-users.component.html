@@ -6,7 +6,14 @@
 <div *ngIf="successMsg" class="alert-wz success mb-3">{{ successMsg }}</div>
 <div *ngIf="errorMsg" class="alert-wz error mb-3">{{ errorMsg }}</div>
 
-<!-- Filters -->
+<div class="card-wz mb-3 d-flex align-items-center justify-content-between">
+  <div>
+    <div class="fw-bold">Points Management</div>
+    <div class="text-muted" style="font-size:0.82rem">Points editing, filtering, and points logs are available on a dedicated page.</div>
+  </div>
+  <a routerLink="/admin/points" class="btn-wz-primary">Go to Manage Points</a>
+</div>
+
 <div class="card-wz mb-3">
   <div class="row g-3 align-items-end form-wz">
     <div class="col-md-5 form-group mb-0">

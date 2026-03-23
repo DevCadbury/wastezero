@@ -1,6 +1,21 @@
 <div class="page-header">
-  <h2>Schedule a Pickup</h2>
-  <p>Fill in the details to request a waste pickup</p>
+  <h2>{{ requestType === 'IllegalDump' ? 'Report Illegal Dump Site' : 'Schedule a Pickup' }}</h2>
+  <p>{{ requestType === 'IllegalDump' ? 'Report illegal dumping with evidence so volunteers can clean it and admin can verify.' : 'Fill in the details to request a waste pickup' }}</p>
+</div>
+
+<div class="d-flex gap-2 mb-3 flex-wrap">
+  <button class="btn btn-sm rounded-pill"
+          [class.btn-success]="requestType === 'Pickup'"
+          [class.btn-outline-secondary]="requestType !== 'Pickup'"
+          (click)="setRequestType('Pickup')">
+    <i class="bi bi-truck me-1"></i>Regular Pickup
+  </button>
+  <button class="btn btn-sm rounded-pill"
+          [class.btn-danger]="requestType === 'IllegalDump'"
+          [class.btn-outline-secondary]="requestType !== 'IllegalDump'"
+          (click)="setRequestType('IllegalDump')">
+    <i class="bi bi-exclamation-triangle me-1"></i>Report Illegal Dump
+  </button>
 </div>
 
 <div class="row justify-content-center">
@@ -12,26 +27,29 @@
       <form (ngSubmit)="onSubmit()" class="form-wz">
         <div class="form-group">
           <label>Request Title <span class="text-danger">*</span></label>
-          <input type="text" [(ngModel)]="form.title" name="title" placeholder="e.g. Weekly plastic disposal" />
+          <input type="text" [(ngModel)]="form.title" name="title"
+                 [placeholder]="requestType === 'IllegalDump' ? 'e.g. Illegal dump near market street' : 'e.g. Weekly plastic disposal'" />
         </div>
 
         <div class="row g-3">
           <div class="col-md-6 form-group">
-            <label>Waste Type <span class="text-danger">*</span></label>
+            <label>{{ requestType === 'IllegalDump' ? 'Dominant Waste Category' : 'Waste Type' }} <span class="text-danger">*</span></label>
             <select [(ngModel)]="form.wasteType" name="wasteType">
               <option value="">Select waste type</option>
               <option *ngFor="let wt of wasteTypes; trackBy: trackByIndex" [value]="wt">{{ wt }}</option>
             </select>
           </div>
           <div class="col-md-6 form-group">
-            <label>Estimated Quantity / Weight <span class="text-danger">*</span></label>
-            <input type="text" [(ngModel)]="form.estimatedQuantity" name="estimatedQuantity" placeholder="e.g. 5 kg, 2 bags" />
+            <label>{{ requestType === 'IllegalDump' ? 'Estimated Dump Size' : 'Estimated Quantity / Weight' }} <span class="text-danger">*</span></label>
+            <input type="text" [(ngModel)]="form.estimatedQuantity" name="estimatedQuantity" [placeholder]="requestType === 'IllegalDump' ? 'e.g. 10 bags across 20m area' : 'e.g. 5 kg, 2 bags'" />
           </div>
         </div>
 
         <div class="form-group">
-          <label>Waste Description (optional)</label>
-          <textarea [(ngModel)]="form.description" name="description" placeholder="Describe the waste items..."></textarea>
+          <label>{{ requestType === 'IllegalDump' ? 'Dump Details' : 'Waste Description (optional)' }}</label>
+          <textarea [(ngModel)]="form.description" name="description"
+                    [placeholder]="requestType === 'IllegalDump' ? 'Describe exact location context, estimated spread, and hazard details...' : 'Describe the waste items...'">
+          </textarea>
         </div>
 
         <div class="form-group">
@@ -57,14 +75,20 @@
 
         <!-- Media upload -->
         <div class="form-group">
-          <label>Photo/Media (optional)</label>
+          <label>{{ requestType === 'IllegalDump' ? 'Evidence Photos' : 'Photo/Media (optional)' }}</label>
           <div class="upload-drop-zone" (click)="fileInput.click()">
-            <input #fileInput type="file" hidden accept="image/*,video/*" (change)="onFileChange($event)">
-            <div *ngIf="!selectedFile">
+            <input #fileInput type="file" hidden
+                   [attr.multiple]="requestType === 'IllegalDump' ? '' : null"
+                   accept="image/*,video/*" (change)="onFileChange($event)">
+            <div *ngIf="requestType === 'IllegalDump' && !selectedFiles.length">
+              <i class="bi bi-image" style="font-size:2rem;color:#94a3b8"></i>
+              <p style="margin:4px 0 0;font-size:0.83rem;color:#64748b">Attach up to 5 photos for evidence</p>
+            </div>
+            <div *ngIf="requestType === 'Pickup' && !selectedFile">
               <i class="bi bi-image" style="font-size:2rem;color:#94a3b8"></i>
               <p style="margin:4px 0 0;font-size:0.83rem;color:#64748b">Click to attach a photo of the waste</p>
             </div>
-            <div *ngIf="selectedFile" class="d-flex align-items-center gap-10">
+            <div *ngIf="requestType === 'Pickup' && selectedFile" class="d-flex align-items-center gap-10">
               <img *ngIf="filePreview" [src]="filePreview" style="width:64px;height:64px;object-fit:cover;border-radius:8px">
               <i *ngIf="!filePreview" class="bi bi-film" style="font-size:2rem;color:var(--wz-primary)"></i>
               <div>
@@ -75,6 +99,20 @@
                 <i class="bi bi-x-circle text-danger"></i>
               </button>
             </div>
+
+            <div *ngIf="requestType === 'IllegalDump' && selectedFiles.length" class="w-100">
+              <div class="d-flex flex-wrap gap-2 mb-2">
+                <img *ngFor="let preview of filePreviews; trackBy: trackByIndex"
+                     [src]="preview"
+                     style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0">
+              </div>
+              <div class="d-flex align-items-center justify-content-between">
+                <small style="color:#64748b">{{ selectedFiles.length }} file(s) selected</small>
+                <button class="btn-icon" type="button" (click)="$event.stopPropagation(); selectedFiles=[]; filePreviews=[]">
+                  <i class="bi bi-x-circle text-danger"></i>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -82,7 +120,7 @@
           <button type="submit" class="btn-wz-primary" [disabled]="loading || uploading">
             <span *ngIf="loading || uploading" class="spinner-border spinner-border-sm me-2"></span>
             <i *ngIf="!loading && !uploading" class="bi bi-calendar-check me-2"></i>
-            {{ uploading ? 'Uploading...' : loading ? 'Scheduling...' : 'Schedule Pickup' }}
+            {{ uploading ? 'Uploading...' : loading ? 'Submitting...' : (requestType === 'IllegalDump' ? 'Submit Report' : 'Schedule Pickup') }}
           </button>
           <button type="button" class="btn-wz-outline" (click)="reset()">Reset</button>
         </div>
@@ -95,12 +133,18 @@
     <div class="card-wz" style="background:linear-gradient(135deg,#e8f5e9,#f1f8e9)">
       <h5 class="fw-bold mb-3"><i class="bi bi-info-circle text-success me-2"></i>How it works</h5>
       <ol style="font-size:0.875rem;color:#374151;padding-left:18px;line-height:2">
-        <li>Fill in your pickup details</li>
-        <li>System saves request as <strong>Open</strong></li>
-        <li>Volunteers browse opportunities</li>
-        <li>Volunteer <strong>accepts</strong> your request</li>
-        <li>Waste is collected at scheduled time</li>
-        <li>Pickup marked as <strong>Completed</strong></li>
+        <li *ngIf="requestType === 'Pickup'">Fill in your pickup details</li>
+        <li *ngIf="requestType === 'Pickup'">System saves request as <strong>Open</strong></li>
+        <li *ngIf="requestType === 'Pickup'">Volunteers browse opportunities</li>
+        <li *ngIf="requestType === 'Pickup'">Volunteer <strong>accepts</strong> your request</li>
+        <li *ngIf="requestType === 'Pickup'">Waste is collected at scheduled time</li>
+        <li *ngIf="requestType === 'Pickup'">Pickup marked as <strong>Completed</strong></li>
+
+        <li *ngIf="requestType === 'IllegalDump'">Attach evidence photos and location details</li>
+        <li *ngIf="requestType === 'IllegalDump'">Volunteers are notified to accept the cleanup</li>
+        <li *ngIf="requestType === 'IllegalDump'">Volunteer marks cleanup as completed</li>
+        <li *ngIf="requestType === 'IllegalDump'">Admin reviews and approves completion</li>
+        <li *ngIf="requestType === 'IllegalDump'">Reporter and volunteer earn reward points</li>
       </ol>
     </div>
     <div class="card-wz mt-3">
@@ -108,6 +152,16 @@
       <div class="d-flex flex-wrap gap-2">
         <span *ngFor="let wt of wasteTypes; trackBy: trackByIndex" class="waste-tag waste-{{wt}}">{{ wt }}</span>
       </div>
+    </div>
+
+    <div class="card-wz mt-3" *ngIf="requestType === 'IllegalDump'" style="background:linear-gradient(135deg,#fff7e6,#fffbeb)">
+      <h6 class="fw-bold mb-2"><img src="assets/coins.png" alt="Coins" style="width:16px;height:16px;object-fit:contain;margin-right:6px">Points Guidance</h6>
+      <div style="font-size:0.82rem;color:#4b5563;line-height:1.7">
+        Reporter earns <strong>20</strong> points and volunteer earns <strong>30</strong> points after admin approves cleanup completion.
+      </div>
+      <a routerLink="/my-points" class="btn-wz-outline btn-sm mt-2">
+        <i class="bi bi-clock-history me-1"></i>View Points History
+      </a>
     </div>
   </div>
 </div>

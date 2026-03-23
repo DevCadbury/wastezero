@@ -15,6 +15,11 @@ const adminLogSchema = new mongoose.Schema({
     ref: 'User',
     default: null,
   },
+  pickup_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Pickup',
+    default: null,
+  },
   details: {
     type: String,
     default: '',
@@ -28,5 +33,6 @@ const adminLogSchema = new mongoose.Schema({
 // Index for sorted log queries
 adminLogSchema.index({ timestamp: -1 });
 adminLogSchema.index({ user_id: 1, timestamp: -1 });
+adminLogSchema.index({ pickup_id: 1, timestamp: -1 });
 
 module.exports = mongoose.model('AdminLog', adminLogSchema);

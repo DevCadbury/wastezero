@@ -34,8 +34,12 @@ export class PickupService {
     return this.http.put<Pickup>(`${this.apiUrl}/pickups/${id}/accept`, {});
   }
 
-  completePickup(id: string): Observable<Pickup> {
-    return this.http.put<Pickup>(`${this.apiUrl}/pickups/${id}/complete`, {});
+  completePickup(id: string, payload: any = {}): Observable<Pickup> {
+    return this.http.put<Pickup>(`${this.apiUrl}/pickups/${id}/complete`, payload);
+  }
+
+  approveCompletion(id: string): Observable<Pickup> {
+    return this.http.put<Pickup>(`${this.apiUrl}/pickups/${id}/approve-completion`, {});
   }
 
   cancelPickup(id: string): Observable<any> {

@@ -1,5 +1,5 @@
-@import 'bootstrap/scss/bootstrap';
-@import 'bootstrap-icons/font/bootstrap-icons.css';
+@use 'bootstrap/scss/bootstrap' as *;
+@import url('bootstrap-icons/font/bootstrap-icons.css');
 
 /* ─────────────────────────────────────────────────
    WasteZero Logo — drag-theft protection

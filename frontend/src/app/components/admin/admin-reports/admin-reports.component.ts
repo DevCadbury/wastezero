@@ -19,6 +19,20 @@ export class AdminReportsComponent implements OnInit {
   volunteersData: any[] = [];
   wasteData: any = {};
   logs: any[] = [];
+  illegalDumpData: any[] = [];
+
+  usersSearch = '';
+  pickupsSearch = '';
+  pickupStatusFilter = '';
+  pickupTypeFilter = '';
+  volunteersSearch = '';
+  illegalDumpSearch = '';
+  illegalDumpApprovalFilter = '';
+
+  logsSearch = '';
+  logsAction = '';
+  logsFrom = '';
+  logsTo = '';
 
   constructor(private adminService: AdminService, private cdr: ChangeDetectorRef) {}
 
@@ -41,7 +55,16 @@ export class AdminReportsComponent implements OnInit {
         this.adminService.getVolunteerReport().subscribe({ next: d => { this.volunteersData = d; this.loading = false; this.cdr.markForCheck(); }, error: () => { this.loading = false; } });
         break;
       case 'logs':
-        this.adminService.getLogs().subscribe({ next: d => { this.logs = d; this.loading = false; this.cdr.markForCheck(); }, error: () => { this.loading = false; } });
+        this.adminService.getLogs({
+          limit: 200,
+          action: this.logsAction || undefined,
+          search: this.logsSearch || undefined,
+          from: this.logsFrom || undefined,
+          to: this.logsTo || undefined,
+        }).subscribe({ next: d => { this.logs = d; this.loading = false; this.cdr.markForCheck(); }, error: () => { this.loading = false; } });
+        break;
+      case 'illegal-dumps':
+        this.adminService.getIllegalDumpReport().subscribe({ next: d => { this.illegalDumpData = d; this.loading = false; this.cdr.markForCheck(); }, error: () => { this.loading = false; } });
         break;
     }
   }
@@ -53,17 +76,17 @@ export class AdminReportsComponent implements OnInit {
 
     switch (type) {
       case 'users':
-        data = this.usersData.map(u => ({ Name: u.name, Email: u.email, Username: u.username, Role: u.role, Location: u.location || '', Joined: new Date(u.createdAt).toLocaleDateString(), Status: u.isSuspended ? 'Suspended' : 'Active' }));
+        data = this.filteredUsersData.map(u => ({ Name: u.name, Email: u.email, Username: u.username, Role: u.role, Location: u.location || '', Joined: new Date(u.createdAt).toLocaleDateString(), Status: u.isSuspended ? 'Suspended' : 'Active' }));
         headers = ['Name', 'Email', 'Username', 'Role', 'Location', 'Joined', 'Status'];
         filename = 'users_report';
         break;
       case 'pickups':
-        data = this.pickupsData.map(p => ({ Title: p.title, User: typeof p.user_id === 'object' ? p.user_id.name : '', WasteType: p.wasteType, Address: p.address, Date: new Date(p.preferredDate).toLocaleDateString(), Status: p.status, Volunteer: p.volunteer_id && typeof p.volunteer_id === 'object' ? p.volunteer_id.name : 'Unassigned' }));
+        data = this.filteredPickupsData.map(p => ({ Title: p.title, User: typeof p.user_id === 'object' ? p.user_id.name : '', WasteType: p.wasteType, Address: p.address, Date: new Date(p.preferredDate).toLocaleDateString(), Status: p.status, Volunteer: p.volunteer_id && typeof p.volunteer_id === 'object' ? p.volunteer_id.name : 'Unassigned' }));
         headers = ['Title', 'User', 'WasteType', 'Address', 'Date', 'Status', 'Volunteer'];
         filename = 'pickups_report';
         break;
       case 'volunteers':
-        data = this.volunteersData.map(v => ({ Name: v.name, Email: v.email, Location: v.location || '', AcceptedPickups: v.acceptedPickups, CompletedPickups: v.completedPickups, TotalCompleted: v.totalPickupsCompleted || 0 }));
+        data = this.filteredVolunteersData.map(v => ({ Name: v.name, Email: v.email, Location: v.location || '', AcceptedPickups: v.acceptedPickups, CompletedPickups: v.completedPickups, TotalCompleted: v.totalPickupsCompleted || 0 }));
         headers = ['Name', 'Email', 'Location', 'AcceptedPickups', 'CompletedPickups', 'TotalCompleted'];
         filename = 'volunteers_report';
         break;
@@ -82,6 +105,75 @@ export class AdminReportsComponent implements OnInit {
   getUser(p: any): string { return typeof p.user_id === 'object' ? p.user_id.name : ''; }
   getVolunteer(p: any): string { return p.volunteer_id && typeof p.volunteer_id === 'object' ? p.volunteer_id.name : 'Unassigned'; }
   totalWaste(w: any): number { return w?.wasteByType?.reduce((a: number, b: any) => a + b.count, 0) || 0; }
+  totalPointsForDump(item: any): number {
+    return (item?.pointTransactions || []).reduce((sum: number, tx: any) => sum + (tx.points || 0), 0);
+  }
+  txUserName(tx: any): string {
+    return tx?.user_id?.name || tx?.user_id?.username || 'Unknown';
+  }
+  performedByName(log: any): string {
+    return log?.performedBy?.name || log?.performedBy?.username || '-';
+  }
+
+  get filteredUsersData(): any[] {
+    const q = this.usersSearch.trim().toLowerCase();
+    if (!q) return this.usersData;
+    return this.usersData.filter((u) =>
+      (u.name || '').toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q) ||
+      (u.role || '').toLowerCase().includes(q) ||
+      (u.location || '').toLowerCase().includes(q)
+    );
+  }
+
+  get filteredPickupsData(): any[] {
+    const q = this.pickupsSearch.trim().toLowerCase();
+    return this.pickupsData.filter((p) => {
+      const textOk = !q ||
+        (p.title || '').toLowerCase().includes(q) ||
+        this.getUser(p).toLowerCase().includes(q) ||
+        (p.address || '').toLowerCase().includes(q);
+      const statusOk = !this.pickupStatusFilter || p.status === this.pickupStatusFilter;
+      const typeVal = p.requestType || 'Pickup';
+      const typeOk = !this.pickupTypeFilter || typeVal === this.pickupTypeFilter;
+      return textOk && statusOk && typeOk;
+    });
+  }
+
+  get filteredVolunteersData(): any[] {
+    const q = this.volunteersSearch.trim().toLowerCase();
+    if (!q) return this.volunteersData;
+    return this.volunteersData.filter((v) =>
+      (v.name || '').toLowerCase().includes(q) ||
+      (v.email || '').toLowerCase().includes(q) ||
+      (v.location || '').toLowerCase().includes(q)
+    );
+  }
+
+  get filteredIllegalDumpData(): any[] {
+    const q = this.illegalDumpSearch.trim().toLowerCase();
+    return this.illegalDumpData.filter((d) => {
+      const textOk = !q ||
+        (d.title || '').toLowerCase().includes(q) ||
+        (d.address || '').toLowerCase().includes(q) ||
+        (d.user_id?.name || '').toLowerCase().includes(q) ||
+        (d.volunteer_id?.name || '').toLowerCase().includes(q);
+      const approvalOk = !this.illegalDumpApprovalFilter || (d.adminApprovalStatus || 'not-required') === this.illegalDumpApprovalFilter;
+      return textOk && approvalOk;
+    });
+  }
+
+  applyLogFilters() {
+    this.loadReport('logs');
+  }
+
+  clearLogFilters() {
+    this.logsSearch = '';
+    this.logsAction = '';
+    this.logsFrom = '';
+    this.logsTo = '';
+    this.loadReport('logs');
+  }
 
   trackById(_: number, item: any): string { return item?._id || item?.id || _; }
   trackByIndex(i: number): number { return i; }
