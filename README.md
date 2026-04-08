@@ -198,6 +198,35 @@ This setup keeps frontend and backend fully decoupled while preserving real-time
 
 ---
 
+## Backend Deployment on Render (Recommended for Socket.IO)
+
+Render supports long-running Node processes, so backend realtime features (Socket.IO) work reliably.
+
+### Option A: Blueprint (recommended)
+- This repo includes a Render blueprint at `render.yaml`.
+- In Render: **New +** -> **Blueprint** -> connect repository -> deploy.
+
+### Option B: Manual Web Service
+- Service type: **Web Service**
+- Root Directory: `backend`
+- Build Command: `npm ci`
+- Start Command: `npm start`
+- Health Check Path: `/api/keepalive`
+
+### Required Environment Variables (Render)
+- `MONGO_URI`
+- `JWT_SECRET`
+- `FRONTEND_URL` (e.g. `https://wastezeros.vercel.app`)
+- `CORS_ORIGINS` (e.g. `https://wastezeros.vercel.app,http://localhost:4200`)
+- SMTP variables for forgot-password / notification emails:
+    - `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `EMAIL_FROM`
+
+### Uptime Monitoring
+- Keep using `GET /api/keepalive` for external uptime monitors.
+- Suggested monitor interval: every 5 minutes.
+
+---
+
 ## Default Admin Setup
 Register an account, then update the role directly in MongoDB Atlas:
 ```

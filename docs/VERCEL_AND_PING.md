@@ -6,6 +6,16 @@ Overview
 - Frontend: deploy to Vercel (recommended). Use the `frontend` folder as the project root.
 - Backend: requires a long-running process for Socket.IO and background uptime. Deploy to Render, Railway, Heroku, or a VM. Serverless on Vercel is not recommended for Socket.IO.
 
+Backend on Render (recommended)
+-------------------------------
+- This repo includes `render.yaml` for one-click Render blueprint deploy.
+- Key runtime config in the blueprint:
+  - Root directory: `backend`
+  - Build command: `npm ci`
+  - Start command: `npm start`
+  - Health check: `/api/keepalive`
+- Socket.IO remains enabled on Render because it runs as a long-lived Node process.
+
 Frontend (Vercel) — quick steps
 -------------------------------
 1. In Vercel, import the Git repository and choose the project.
