@@ -5,6 +5,9 @@
   "outputDirectory": "frontend/dist/frontend/browser",
   "routes": [
     {
+      "handle": "filesystem"
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
