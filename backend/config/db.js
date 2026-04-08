@@ -6,10 +6,15 @@ dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 10000,
+    });
   } catch (error) {
     console.error(`MongoDB Connection Error: ${error.message}`);
-    process.exit(1);
+    // In Vercel serverless, do not hard-exit the process on transient DB failures.
+    if (!process.env.VERCEL) {
+      process.exit(1);
+    }
   }
 };
 

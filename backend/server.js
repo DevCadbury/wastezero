@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const compression = require('compression');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const { initSocket, getOnlineUsers } = require('./socket');
 const { corsOriginHandler, getAllowedOrigins } = require('./config/cors');
@@ -60,7 +61,16 @@ app.use('/api/banners', require('./routes/banners'));
 // Health check — no cache
 app.get('/api/health', (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ status: 'OK', message: 'WasteZero API is running', timestamp: new Date() });
+  const state = mongoose.connection.readyState;
+  const dbConnected = state === 1;
+  res.status(dbConnected ? 200 : 503).json({
+    status: dbConnected ? 'OK' : 'DEGRADED',
+    dbConnected,
+    message: dbConnected
+      ? 'WasteZero API is running'
+      : 'WasteZero API is running but database is unavailable',
+    timestamp: new Date(),
+  });
 });
 
 // Uptime monitor keepalive endpoint
