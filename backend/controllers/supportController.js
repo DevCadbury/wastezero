@@ -53,8 +53,8 @@ exports.myTickets = async (req, res) => {
 exports.getTicket = async (req, res) => {
   try {
     const ticket = await SupportTicket.findById(req.params.id)
-      .populate('user_id', 'name username role email')
-      .populate('replies.author_id', 'name username role')
+      .populate('user_id', 'name username role email avatar')
+      .populate('replies.author_id', 'name username role avatar')
       .lean();
     if (!ticket) return res.status(404).json({ message: 'Ticket not found' });
     // Non-admin can only view their own ticket
@@ -70,17 +70,57 @@ exports.getTicket = async (req, res) => {
 // GET /api/support  — admin: all tickets
 exports.allTickets = async (req, res) => {
   try {
-    const { status, page = 1, limit = 30 } = req.query;
+    const { status, category, page = 1, limit = 30, search = '', user = '' } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 30));
+    const searchText = (search || '').toString().trim();
+    const userText = (user || '').toString().trim();
+
     const filter = {};
     if (status) filter.status = status;
+    if (category) filter.category = category;
+
+    if (searchText) {
+      const regex = new RegExp(searchText, 'i');
+      filter.$or = [
+        { reportId: regex },
+        { subject: regex },
+        { description: regex },
+      ];
+    }
+
+    if (userText) {
+      const userRegex = new RegExp(userText, 'i');
+      const userFilter = [];
+      if (userRegex) {
+        userFilter.push({ name: userRegex }, { email: userRegex }, { username: userRegex });
+      }
+      if (userText.match(/^[0-9a-fA-F]{24}$/)) {
+        userFilter.push({ _id: userText });
+      }
+
+      const matchedUsers = await User.find({ $or: userFilter }).select('_id').lean();
+      const matchedIds = matchedUsers.map((u) => u._id);
+      if (!matchedIds.length) {
+        return res.json({ tickets: [], total: 0, page: pageNum, pages: 1, limit: limitNum });
+      }
+      filter.user_id = { $in: matchedIds };
+    }
+
     const tickets = await SupportTicket.find(filter)
-      .populate('user_id', 'name username role email')
+      .populate('user_id', 'name username role email avatar')
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit))
+      .skip((pageNum - 1) * limitNum)
+      .limit(limitNum)
       .lean();
     const total = await SupportTicket.countDocuments(filter);
-    res.json({ tickets, total, page: Number(page) });
+    res.json({
+      tickets,
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum) || 1,
+      limit: limitNum,
+    });
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }

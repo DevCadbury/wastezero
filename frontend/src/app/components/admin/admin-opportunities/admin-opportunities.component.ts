@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { OpportunityService } from '../../../services/opportunity.service';
 import { ApplicationService } from '../../../services/application.service';
+import { AdminService } from '../../../services/admin.service';
+import { UserService } from '../../../services/user.service';
 import { AuthService } from '../../../services/auth.service';
 import { SocketService } from '../../../services/socket.service';
 import { Opportunity, Application } from '../../../models/models';
@@ -21,12 +23,14 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
   activeTab: 'list' | 'create' | 'edit' | 'applications' = 'list';
 
   // ── Opportunity list ──
-  opportunities: Opportunity[] = [];
+  opportunities: any[] = [];
   loading = true;
   currentPage = 1;
   totalPages = 1;
   total = 0;
   filterStatus = '';
+  searchQuery = '';
+  includeDeleted = false;
   successMsg = '';
   errorMsg = '';
 
@@ -38,6 +42,8 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
 
   // ── Skill input helper ──
   newSkill = '';
+  skillCatalog: string[] = [];
+  skillCatalogFilter = '';
 
   // ── Optional banner upload for opportunity ──
   bannerFile: File | null = null;
@@ -58,6 +64,8 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
     public auth: AuthService,
     private oppService: OpportunityService,
     private appService: ApplicationService,
+    private adminService: AdminService,
+    private userService: UserService,
     private bannerService: BannerService,
     private socketService: SocketService,
     private cdr: ChangeDetectorRef,
@@ -65,6 +73,7 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
 
   ngOnInit() {
     this.loadBanners();
+    this.loadSkillCatalog();
     this.loadOpportunities();
 
     // Real-time: refresh when new applications arrive or opportunities change
@@ -87,16 +96,17 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
   loadOpportunities() {
     this.loading = true;
     this.loadBanners();
-    this.oppService
-      .list({
+    this.adminService
+      .getAdminOpportunities({
         page: this.currentPage,
         limit: 12,
-        mine: true,
-        status: this.filterStatus || undefined,
+        status: (this.filterStatus as 'open' | 'in-progress' | 'closed') || undefined,
+        search: this.searchQuery || undefined,
+        includeDeleted: this.includeDeleted,
       })
       .subscribe({
         next: (data) => {
-          this.opportunities = data.opportunities;
+          this.opportunities = data.items || [];
           this.totalPages = data.pages;
           this.total = data.total;
           this.loading = false;
@@ -117,6 +127,11 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
   }
 
   filterByStatus() {
+    this.currentPage = 1;
+    this.loadOpportunities();
+  }
+
+  applyFilters() {
     this.currentPage = 1;
     this.loadOpportunities();
   }
@@ -161,7 +176,7 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
     const payload = { ...this.form };
 
     const obs$ = this.editingId
-      ? this.oppService.update(this.editingId, payload)
+      ? this.adminService.updateAdminOpportunity(this.editingId, payload)
       : this.oppService.create(payload);
 
     obs$.subscribe({
@@ -198,9 +213,9 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
 
   deleteOpportunity(opp: Opportunity) {
     if (!confirm(`Delete "${opp.title}"? This is a soft delete.`)) return;
-    this.oppService.delete(opp._id).subscribe({
+    this.adminService.removeAdminOpportunity(opp._id).subscribe({
       next: () => {
-        this.successMsg = 'Opportunity deleted';
+        this.successMsg = 'Opportunity removed';
         this.loadOpportunities();
         this.cdr.markForCheck();
         setTimeout(() => { this.successMsg = ''; this.cdr.markForCheck(); }, 4000);
@@ -220,6 +235,25 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
       this.form.requiredSkills.push(s);
     }
     this.newSkill = '';
+  }
+
+  toggleSkill(skill: string) {
+    const idx = this.form.requiredSkills.findIndex((s: string) => s.toLowerCase() === skill.toLowerCase());
+    if (idx >= 0) {
+      this.form.requiredSkills.splice(idx, 1);
+    } else {
+      this.form.requiredSkills.push(skill);
+    }
+  }
+
+  isSkillSelected(skill: string): boolean {
+    return this.form.requiredSkills.some((s: string) => s.toLowerCase() === skill.toLowerCase());
+  }
+
+  get filteredSkillCatalog(): string[] {
+    const q = (this.skillCatalogFilter || '').trim().toLowerCase();
+    if (!q) return this.skillCatalog;
+    return this.skillCatalog.filter((s) => s.toLowerCase().includes(q));
   }
 
   removeSkill(index: number) {
@@ -292,6 +326,16 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
     return typeof v === 'object' && v ? (v as any).skills || [] : [];
   }
 
+  getVolunteerAvatar(app: Application): string | null {
+    const v = app.volunteer_id;
+    return typeof v === 'object' && v ? (v as any).avatar || null : null;
+  }
+
+  volunteerInitials(app: Application): string {
+    const name = this.getVolunteerName(app) || '?';
+    return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
+  }
+
   backToList() {
     this.activeTab = 'list';
     this.editingId = null;
@@ -354,6 +398,19 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
     });
   }
 
+  private loadSkillCatalog() {
+    this.userService.getSkillsCatalog().subscribe({
+      next: (skills) => {
+        this.skillCatalog = Array.isArray(skills) ? skills : [];
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.skillCatalog = [];
+        this.cdr.markForCheck();
+      },
+    });
+  }
+
   private upsertBanner(opp: Opportunity): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       if (!this.bannerFile) {
@@ -404,4 +461,8 @@ export class AdminOpportunitiesComponent implements OnInit, OnDestroy {
   }
 
   trackById(_: number, item: any): string { return item?._id || _; }
+
+  creatorName(opp: any): string {
+    return opp?.ngo_id?.name || opp?.ngo_id?.username || 'Unknown';
+  }
 }

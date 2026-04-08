@@ -54,7 +54,7 @@ export class ResetPasswordComponent implements OnInit {
         setTimeout(() => this.router.navigate(['/auth']), 2500);
       },
       error: (err) => {
-        this.error = err.error?.error || 'Reset failed. The link may have expired.';
+        this.error = err.error?.message || err.error?.error || 'Reset failed. The link may have expired.';
         this.loading = false;
         this.cdr.markForCheck();
       },

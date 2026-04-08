@@ -93,4 +93,8 @@ export class AuthComponent {
   toggleLoginPw() { this.showLoginPw = !this.showLoginPw; }
   toggleRegPw() { this.showRegPw = !this.showRegPw; }
   toggleRegConfirmPw() { this.showRegConfirmPw = !this.showRegConfirmPw; }
+
+  navigateToForgotPassword() {
+    this.router.navigate(['/forgot-password']);
+  }
 }

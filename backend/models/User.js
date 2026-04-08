@@ -86,6 +86,17 @@ const userSchema = new mongoose.Schema({
   resetPasswordToken: { type: String, default: null },
   resetPasswordExpires: { type: Date, default: null },
   avatar: { type: String, default: null },
+  lastSeen: { type: Date, default: Date.now },
+  emailPreferences: {
+    enabled: { type: Boolean, default: true },
+    generalNotifications: { type: Boolean, default: true },
+    systemAlerts: { type: Boolean, default: true },
+    messages: { type: Boolean, default: true },
+    support: { type: Boolean, default: true },
+    opportunities: { type: Boolean, default: true },
+    pickups: { type: Boolean, default: true },
+    security: { type: Boolean, default: true },
+  },
 });
 
 // Hash password before saving

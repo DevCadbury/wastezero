@@ -18,10 +18,10 @@ router.get('/matches', ctrl.listMatchedOpportunities);
 // GET    /api/opportunities/:id      — Get single opportunity
 router.get('/:id', ctrl.getOpportunity);
 
-// PUT    /api/opportunities/:id      — Admin (owner) updates opportunity
+// PUT    /api/opportunities/:id      — Admin updates opportunity
 router.put('/:id', adminOnly, ctrl.updateOpportunity);
 
-// DELETE /api/opportunities/:id      — Admin (owner) soft-deletes opportunity
+// DELETE /api/opportunities/:id      — Admin soft-deletes opportunity
 router.delete('/:id', adminOnly, ctrl.deleteOpportunity);
 
 module.exports = router;

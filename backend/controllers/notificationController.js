@@ -1,12 +1,31 @@
 const Notification = require('../models/Notification');
+const User = require('../models/User');
 const { emitToUser } = require('../socket');
+const { sendNotificationEmail } = require('../emails/notificationEmail');
 
 // ── Helper: standard error response ───────────────────────────────────────
 const errorResponse = (res, status, message) =>
   res.status(status).json({ error: true, message });
 
+function preferenceKeyForNotification(notif) {
+  const type = notif?.type || '';
+  if (type === 'system:alert') return 'systemAlerts';
+  if (type.startsWith('chat')) return 'messages';
+  if (notif?.ref_model === 'SupportTicket') return 'support';
+  if (type.startsWith('pickup')) return 'pickups';
+  if (type.startsWith('opportunity') || type.startsWith('application')) return 'opportunities';
+  return 'generalNotifications';
+}
+
+function canSendNotificationEmail(user, notif) {
+  const pref = user?.emailPreferences || {};
+  if (pref.enabled === false) return false;
+  const key = preferenceKeyForNotification(notif);
+  return pref[key] !== false;
+}
+
 // ── Create & emit notification (used internally by other controllers) ─────
-async function createNotification({ user_id, type, title, message, ref_id, ref_model }) {
+async function createNotification({ user_id, type, title, message, ref_id, ref_model, sendEmail = true }) {
   const notif = await Notification.create({
     user_id,
     type,
@@ -18,6 +37,19 @@ async function createNotification({ user_id, type, title, message, ref_id, ref_m
 
   // Emit instantly via Socket.IO
   emitToUser(user_id, 'notification:new', notif.toObject());
+
+  try {
+    const user = await User.findById(user_id).select('name email emailPreferences').lean();
+    if (sendEmail && user?.email && canSendNotificationEmail(user, notif)) {
+      await sendNotificationEmail({
+        to: user.email,
+        userName: user.name,
+        notification: notif.toObject(),
+      });
+    }
+  } catch (emailErr) {
+    console.error('Notification email failed:', emailErr.message);
+  }
 
   return notif;
 }

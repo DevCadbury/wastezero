@@ -15,6 +15,18 @@ export interface User {
   totalPointsEarned?: number;
   wasteStats: WasteStats;
   createdAt: string;
+  avatar?: string | null;
+  lastSeen?: string;
+  emailPreferences?: {
+    enabled?: boolean;
+    generalNotifications?: boolean;
+    systemAlerts?: boolean;
+    messages?: boolean;
+    support?: boolean;
+    opportunities?: boolean;
+    pickups?: boolean;
+    security?: boolean;
+  };
   token?: string;
 }
 
@@ -36,14 +48,35 @@ export interface Message {
   content: string;
   mediaUrl?: string | null;
   mediaType?: 'image' | 'video' | 'file' | null;
+  reactions?: Array<{
+    user_id: User | string;
+    emoji: string;
+    reactedAt: string;
+  }>;
+  isDeleted?: boolean;
+  deletedAt?: string | null;
+  editedAt?: string | null;
   isRead: boolean;
   timestamp: string;
+  archived?: boolean;
+  archivedReason?: string | null;
 }
 
 export interface AdminStat {
   totalUsers: number;
   totalVolunteers: number;
   totalAdmins: number;
+  totalOpportunities: number;
+  activeOpportunities: number;
+  completedOpportunities: number;
+  totalApplications: number;
+  totalChatReports?: number;
+  openChatReports?: number;
+  applicationByStatus: {
+    pending: number;
+    accepted: number;
+    rejected: number;
+  };
   totalPickups: number;
   completedPickups: number;
   pendingPickups: number;

@@ -37,8 +37,6 @@ async function universalSearch(req, res) {
 
       if (role === 'volunteer' || role === 'user') {
         oppFilter.status = 'open';
-      } else if (role === 'admin') {
-        oppFilter.ngo_id = req.user._id;
       }
 
       oppFilter.$or = [

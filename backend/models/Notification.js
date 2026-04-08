@@ -21,6 +21,7 @@ const notificationSchema = new mongoose.Schema({
       'pickup:accepted',
       'pickup:completed',
       'system',
+      'system:alert',
     ],
     required: true,
   },

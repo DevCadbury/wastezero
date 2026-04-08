@@ -3,7 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Pickup = require('../models/Pickup');
 const PointTransaction = require('../models/PointTransaction');
-const { protect } = require('../middleware/auth');
+const { protect, adminOnly } = require('../middleware/auth');
 
 // GET /api/users/profile - Get own profile
 router.get('/profile', protect, async (req, res) => {
@@ -18,7 +18,7 @@ router.get('/profile', protect, async (req, res) => {
 // PUT /api/users/profile - Update own profile
 router.put('/profile', protect, async (req, res) => {
   try {
-    const { name, email, location, skills, bio, phone } = req.body;
+    const { name, email, location, skills, bio, phone, avatar, emailPreferences } = req.body;
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -32,12 +32,51 @@ router.put('/profile', protect, async (req, res) => {
     if (skills !== undefined) user.skills = skills;
     if (bio !== undefined) user.bio = bio;
     if (phone !== undefined) user.phone = phone;
+    if (avatar !== undefined) user.avatar = avatar || null;
+    if (emailPreferences && typeof emailPreferences === 'object') {
+      user.emailPreferences = {
+        ...user.emailPreferences,
+        enabled: emailPreferences.enabled !== undefined ? !!emailPreferences.enabled : user.emailPreferences?.enabled,
+        generalNotifications: emailPreferences.generalNotifications !== undefined ? !!emailPreferences.generalNotifications : user.emailPreferences?.generalNotifications,
+        systemAlerts: emailPreferences.systemAlerts !== undefined ? !!emailPreferences.systemAlerts : user.emailPreferences?.systemAlerts,
+        messages: emailPreferences.messages !== undefined ? !!emailPreferences.messages : user.emailPreferences?.messages,
+        support: emailPreferences.support !== undefined ? !!emailPreferences.support : user.emailPreferences?.support,
+        opportunities: emailPreferences.opportunities !== undefined ? !!emailPreferences.opportunities : user.emailPreferences?.opportunities,
+        pickups: emailPreferences.pickups !== undefined ? !!emailPreferences.pickups : user.emailPreferences?.pickups,
+        security: emailPreferences.security !== undefined ? !!emailPreferences.security : user.emailPreferences?.security,
+      };
+    }
 
     await user.save();
     const updated = await User.findById(user._id).select('-password');
     res.json(updated);
   } catch (error) {
     res.status(500).json({ message: error.message || 'Server error' });
+  }
+});
+
+// GET /api/users/skills-catalog - Distinct volunteer profile skills for admin opportunity forms
+router.get('/skills-catalog', protect, adminOnly, async (req, res) => {
+  try {
+    const rows = await User.aggregate([
+      { $match: { role: 'volunteer', isSuspended: { $ne: true } } },
+      { $project: { skills: 1 } },
+      { $unwind: '$skills' },
+      {
+        $project: {
+          skill: {
+            $trim: { input: { $toString: '$skills' } },
+          },
+        },
+      },
+      { $match: { skill: { $ne: '' } } },
+      { $group: { _id: { $toLower: '$skill' }, skill: { $first: '$skill' } } },
+      { $sort: { skill: 1 } },
+    ]);
+
+    res.json(rows.map((r) => r.skill));
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

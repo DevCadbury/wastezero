@@ -1,6 +1,6 @@
 <div class="page-header">
   <h2>User Management</h2>
-  <p>View, manage and monitor all platform users</p>
+  <p>Monitor user activity, locations, and participation</p>
 </div>
 
 <div *ngIf="successMsg" class="alert-wz success mb-3">{{ successMsg }}</div>
@@ -18,7 +18,7 @@
   <div class="row g-3 align-items-end form-wz">
     <div class="col-md-5 form-group mb-0">
       <label>Search</label>
-      <input type="text" [(ngModel)]="filter" placeholder="Search by name or email..." />
+      <input type="text" [(ngModel)]="filter" placeholder="Search by name, email, or location..." />
     </div>
     <div class="col-md-3 form-group mb-0">
       <label>Role</label>
@@ -26,14 +26,13 @@
         <option value="">All Roles</option>
         <option value="user">User</option>
         <option value="volunteer">Volunteer</option>
-        <option value="admin">Admin</option>
       </select>
     </div>
     <div class="col-md-2">
-      <button class="btn-wz-outline" (click)="filter=''; roleFilter=''">Clear</button>
+      <button class="btn-wz-outline" (click)="filter=''; roleFilter=''; applyFilters()">Clear</button>
     </div>
-    <div class="col-md-2 text-end">
-      <span class="text-muted" style="font-size:0.875rem">{{ filtered.length }} users</span>
+    <div class="col-md-2 d-flex gap-2">
+      <button class="btn-wz-primary" (click)="applyFilters()">Apply</button>
     </div>
   </div>
 </div>
@@ -48,7 +47,7 @@
           <th>User</th>
           <th>Role</th>
           <th>Location</th>
-          <th>Joined</th>
+          <th>Activity</th>
           <th>Status</th>
           <th>Actions</th>
         </tr>
@@ -68,16 +67,27 @@
           </td>
           <td><span class="badge" [class.bg-success]="u.role==='volunteer'" [class.bg-primary]="u.role==='user'" [class.bg-danger]="u.role==='admin'" style="text-transform:capitalize">{{ u.role }}</span></td>
           <td>{{ u.location || '-' }}</td>
-          <td>{{ u.createdAt | date:'mediumDate' }}</td>
+          <td>
+            <div style="font-size:0.78rem;line-height:1.35">
+              <div><strong>Apps:</strong> {{ u.totalApplications || 0 }}</div>
+              <div><strong>Accepted:</strong> {{ u.acceptedApplications || 0 }}</div>
+              <div><strong>Participation:</strong> {{ u.participatedOpportunities || 0 }}</div>
+            </div>
+          </td>
           <td>
             <span *ngIf="!u.isSuspended" class="badge bg-success">Active</span>
             <span *ngIf="u.isSuspended" class="badge bg-danger">Suspended</span>
           </td>
           <td>
             <div class="d-flex gap-1">
-              <button class="btn btn-sm" [class.btn-warning]="!u.isSuspended" [class.btn-success]="u.isSuspended" (click)="toggleSuspend(u)" style="font-size:0.75rem">
+              <button class="btn btn-sm" [class.btn-warning]="!u.isSuspended" [class.btn-success]="u.isSuspended" (click)="toggleSuspend(u)" style="font-size:0.75rem" title="Suspend/un-suspend">
                 <i class="bi" [class.bi-pause-circle]="!u.isSuspended" [class.bi-play-circle]="u.isSuspended"></i>
-                {{ u.isSuspended ? 'Activate' : 'Suspend' }}
+              </button>
+              <button class="btn btn-sm btn-outline-primary" (click)="openResetPasswordDialog(u)" style="font-size:0.75rem" title="Reset password">
+                <i class="bi bi-key"></i>
+              </button>
+              <button class="btn btn-sm" [class.btn-outline-danger]="!u.isSuspended" [class.btn-outline-success]="u.isSuspended" (click)="toggleBlock(u)" style="font-size:0.75rem">
+                <i class="bi" [class.bi-slash-circle]="!u.isSuspended" [class.bi-unlock]="u.isSuspended"></i>
               </button>
               <button class="btn btn-sm btn-outline-danger" (click)="deleteUser(u)" style="font-size:0.75rem">
                 <i class="bi bi-trash"></i>
@@ -90,5 +100,53 @@
         </tr>
       </tbody>
     </table>
+  </div>
+  <div class="d-flex justify-content-between align-items-center mt-2">
+    <span class="text-muted" style="font-size:0.875rem">{{ total }} users</span>
+    <div class="d-flex align-items-center gap-2" *ngIf="totalPages > 1">
+      <button class="btn-wz-outline btn-sm" (click)="goToPage(page - 1)" [disabled]="page <= 1">Prev</button>
+      <span class="text-muted" style="font-size:0.85rem">Page {{ page }} / {{ totalPages }}</span>
+      <button class="btn-wz-outline btn-sm" (click)="goToPage(page + 1)" [disabled]="page >= totalPages">Next</button>
+    </div>
+  </div>
+</div>
+
+<div *ngIf="resetDialogOpen" class="wz-system-alert-backdrop" (click)="closeResetPasswordDialog()"></div>
+<div *ngIf="resetDialogOpen && resetTargetUser" class="wz-system-alert-dialog" role="dialog" aria-modal="true" aria-label="Reset User Password" (click)="$event.stopPropagation()">
+  <div class="wz-system-alert-header">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-key-fill"></i>
+      <span>Reset Password</span>
+    </div>
+    <button class="btn btn-sm btn-link text-secondary p-0" (click)="closeResetPasswordDialog()" aria-label="Close">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <div class="wz-system-alert-body">
+    <div style="font-size:0.86rem;color:#475569;margin-bottom:10px">
+      Resetting password for <strong>{{ resetTargetUser.name }}</strong> ({{ resetTargetUser.email }}).
+    </div>
+    <div class="form-group mb-2">
+      <label style="font-weight:600">New Temporary Password</label>
+      <div class="d-flex gap-2">
+        <input type="text" [(ngModel)]="resetForm.newPassword" maxlength="64" placeholder="Enter secure password" />
+        <button class="btn-wz-outline" type="button" (click)="refreshGeneratedPassword()">Generate</button>
+      </div>
+    </div>
+    <div class="form-check mt-2">
+      <input class="form-check-input" type="checkbox" id="sendResetEmail" [(ngModel)]="resetForm.sendEmail" />
+      <label class="form-check-label" for="sendResetEmail" style="font-size:0.82rem;color:#475569">
+        Email this password to user (if email notifications are enabled)
+      </label>
+    </div>
+  </div>
+  <div class="wz-system-alert-footer">
+    <button class="btn-wz-outline" (click)="closeResetPasswordDialog()" [disabled]="resetSubmitting">Cancel</button>
+    <button class="btn-wz-outline" (click)="sendResetLinkToken()" [disabled]="resetSubmitting">
+      {{ resetSubmitting ? 'Sending...' : 'Send Reset Link Token' }}
+    </button>
+    <button class="btn-wz-primary" (click)="submitPasswordReset()" [disabled]="resetSubmitting || !resetForm.newPassword.trim()">
+      {{ resetSubmitting ? 'Resetting...' : 'Reset Password' }}
+    </button>
   </div>
 </div>

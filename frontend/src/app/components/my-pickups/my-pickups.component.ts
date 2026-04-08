@@ -25,6 +25,7 @@ export class MyPickupsComponent implements OnInit {
   msgModal: { pickup: Pickup; receiverId: string; receiverName: string } | null = null;
   msgContent = '';
   msgSending = false;
+  msgError = '';
   completionModalPickup: Pickup | null = null;
   completionFiles: File[] = [];
   completionPreviews: string[] = [];
@@ -147,18 +148,37 @@ export class MyPickupsComponent implements OnInit {
     if (!partner || typeof partner === 'string') return;
     this.msgModal = { pickup, receiverId: (partner as any)._id, receiverName: (partner as any).name };
     this.msgContent = '';
+    this.msgError = '';
+    this.cdr.markForCheck();
+  }
+
+  closeMsgModal() {
+    this.msgModal = null;
+    this.msgContent = '';
+    this.msgSending = false;
+    this.msgError = '';
+    this.cdr.markForCheck();
   }
 
   sendMessage() {
     if (!this.msgModal || !this.msgContent.trim()) return;
     this.msgSending = true;
+    this.msgError = '';
     this.messageService.sendMessage({
       receiver_id: this.msgModal.receiverId,
       content: this.msgContent,
       pickup_id: this.msgModal.pickup._id,
     }).subscribe({
-      next: () => { this.msgSending = false; this.msgModal = null; this.successMsg = 'Message sent!'; },
-      error: () => { this.msgSending = false; },
+      next: () => {
+        this.msgSending = false;
+        this.successMsg = 'Message sent!';
+        this.closeMsgModal();
+      },
+      error: (err) => {
+        this.msgSending = false;
+        this.msgError = err?.error?.message || 'Unable to send message.';
+        this.cdr.markForCheck();
+      },
     });
   }
 

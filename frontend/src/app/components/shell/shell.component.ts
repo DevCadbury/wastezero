@@ -27,6 +27,12 @@ export class ShellComponent implements OnInit, OnDestroy {
   notifications: Notification[] = [];
   unreadCount = 0;
   showNotifDropdown = false;
+  notificationFilter: 'all' | 'alerts' | 'messages' = 'all';
+  showSystemAlertDialog = false;
+  activeSystemAlert: Notification | null = null;
+  systemAlertsEnabled = true;
+  private pendingSystemAlerts: Notification[] = [];
+  private readonly systemAlertAckPrefix = 'wz-system-alert-ack';
 
   // Points
   showPointsDropdown = false;
@@ -59,8 +65,14 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.auth.currentUser$.subscribe((u) => {
         this.user = u;
         if (u) {
+          this.systemAlertsEnabled = this.readSystemAlertSetting(u._id);
           this.notifService.loadNotifications({ limit: 15 }).subscribe();
           this.notifService.loadUnreadCount().subscribe();
+        } else {
+          this.systemAlertsEnabled = true;
+          this.showSystemAlertDialog = false;
+          this.activeSystemAlert = null;
+          this.pendingSystemAlerts = [];
         }
         this.cdr.markForCheck();
       }),
@@ -81,6 +93,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.subs.push(
       this.notifService.notifications$.subscribe((n) => {
         this.notifications = n;
+        this.syncSystemAlertsFromList(n);
         this.cdr.markForCheck();
       }),
     );
@@ -88,6 +101,13 @@ export class ShellComponent implements OnInit, OnDestroy {
       this.notifService.unreadCount$.subscribe((c) => {
         this.unreadCount = c;
         this.cdr.markForCheck();
+      }),
+    );
+
+    this.subs.push(
+      this.socketService.on<Notification>('notification:new').subscribe((notif) => {
+        if (!this.isBroadcastAlertNotification(notif)) return;
+        this.queueSystemAlert(notif);
       }),
     );
 
@@ -117,6 +137,30 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   get initials(): string {
     return this.user?.name?.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'U';
+  }
+
+  get alertNotifications(): Notification[] {
+    return this.notifications.filter((n) => this.isBroadcastAlertNotification(n));
+  }
+
+  get alertUnreadCount(): number {
+    return this.alertNotifications.filter((n) => !n.isRead).length;
+  }
+
+  get messageNotifications(): Notification[] {
+    return this.notifications.filter((n) => n.type.includes('chat') || n.ref_model === 'Message');
+  }
+
+  get filteredNotifications(): Notification[] {
+    if (this.notificationFilter === 'alerts') return this.alertNotifications;
+    if (this.notificationFilter === 'messages') return this.messageNotifications;
+    return this.notifications;
+  }
+
+  get filteredUnreadCount(): number {
+    if (this.notificationFilter === 'alerts') return this.alertUnreadCount;
+    if (this.notificationFilter === 'messages') return this.messageNotifications.filter((n) => !n.isRead).length;
+    return this.unreadCount;
   }
 
   logout() {
@@ -155,6 +199,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.showPointsDropdown = false;
     this.showSearchResults = false;
     if (this.showNotifDropdown) {
+      this.notificationFilter = 'all';
       this.notifService.loadNotifications({ limit: 15 }).subscribe();
     }
     this.cdr.markForCheck();
@@ -164,6 +209,14 @@ export class ShellComponent implements OnInit, OnDestroy {
     if (!notif.isRead) {
       this.notifService.markAsRead(notif._id).subscribe();
     }
+
+    if (this.isBroadcastAlertNotification(notif)) {
+      this.openSystemAlertDialog(notif);
+      this.showNotifDropdown = false;
+      this.cdr.markForCheck();
+      return;
+    }
+
     // Navigate based on type
     if (notif.ref_model === 'Application') {
       if (this.user?.role === 'admin') {
@@ -174,7 +227,11 @@ export class ShellComponent implements OnInit, OnDestroy {
     } else if (notif.ref_model === 'Opportunity') {
       this.router.navigate(['/opportunities']);
     } else if (notif.ref_model === 'Message') {
-      this.router.navigate(['/messages']);
+      if (notif.ref_id) {
+        this.router.navigate(['/messages'], { queryParams: { message: notif.ref_id } });
+      } else {
+        this.router.navigate(['/messages']);
+      }
     }
     this.showNotifDropdown = false;
     this.cdr.markForCheck();
@@ -182,6 +239,40 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   markAllRead() {
     this.notifService.markAllAsRead().subscribe();
+  }
+
+  toggleSystemAlertSetting(enabled: boolean) {
+    this.systemAlertsEnabled = !!enabled;
+    this.writeSystemAlertSetting(this.systemAlertsEnabled);
+    if (!this.systemAlertsEnabled) {
+      this.showSystemAlertDialog = false;
+      this.activeSystemAlert = null;
+      this.pendingSystemAlerts = [];
+    }
+    this.cdr.markForCheck();
+  }
+
+  closeSystemAlertDialog() {
+    if (this.activeSystemAlert) {
+      this.acknowledgeSystemAlert(this.activeSystemAlert);
+    }
+
+    this.showSystemAlertDialog = false;
+    this.activeSystemAlert = null;
+
+    while (this.pendingSystemAlerts.length) {
+      const next = this.pendingSystemAlerts.shift() as Notification;
+      if (!this.isSystemAlertAcknowledged(next)) {
+        this.openSystemAlertDialog(next);
+        break;
+      }
+    }
+
+    this.cdr.markForCheck();
+  }
+
+  confirmSystemAlert() {
+    this.closeSystemAlertDialog();
   }
 
   // ── Points ──────────────────────────────────────────────────────────────
@@ -288,5 +379,105 @@ export class ShellComponent implements OnInit, OnDestroy {
     this.showPointsDropdown = false;
     this.showSearchResults = false;
     this.cdr.markForCheck();
+  }
+
+  private queueSystemAlert(notif: Notification) {
+    if (!notif?._id || this.isSystemAlertAcknowledged(notif)) {
+      return;
+    }
+
+    if (!this.systemAlertsEnabled) {
+      return;
+    }
+
+    if (this.showSystemAlertDialog) {
+      const exists = this.pendingSystemAlerts.some((n) => n._id === notif._id);
+      if (!exists) {
+        this.pendingSystemAlerts.push(notif);
+      }
+      return;
+    }
+
+    this.openSystemAlertDialog(notif);
+    this.cdr.markForCheck();
+  }
+
+  private syncSystemAlertsFromList(list: Notification[]) {
+    if (!Array.isArray(list) || !list.length) return;
+    if (!this.systemAlertsEnabled) return;
+
+    // On login/load we only auto-open the newest pending broadcast alert.
+    const latestPending = list.find((notif) => {
+      if (!this.isBroadcastAlertNotification(notif) || !notif?._id) return false;
+      if (this.isSystemAlertAcknowledged(notif)) return false;
+      const isActive = this.activeSystemAlert?._id === notif._id;
+      const isPending = this.pendingSystemAlerts.some((n) => n._id === notif._id);
+      return !isActive && !isPending;
+    });
+
+    if (!latestPending) return;
+
+    if (!this.showSystemAlertDialog) {
+      this.openSystemAlertDialog(latestPending);
+      return;
+    }
+
+    this.pendingSystemAlerts.push(latestPending);
+  }
+
+  private openSystemAlertDialog(notif: Notification) {
+    this.activeSystemAlert = notif;
+    this.showSystemAlertDialog = true;
+  }
+
+  private getSystemAlertAckKey(notif: Notification): string {
+    const userId = this.user?._id || 'anonymous';
+    return `${this.systemAlertAckPrefix}:${userId}:${notif._id}`;
+  }
+
+  private isSystemAlertAcknowledged(notif: Notification): boolean {
+    try {
+      return localStorage.getItem(this.getSystemAlertAckKey(notif)) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  private acknowledgeSystemAlert(notif: Notification) {
+    try {
+      localStorage.setItem(this.getSystemAlertAckKey(notif), '1');
+    } catch {
+      // Ignore storage failures; notification remains available from dropdown.
+    }
+  }
+
+  private isBroadcastAlertNotification(notif: Notification | null | undefined): boolean {
+    if (!notif) return false;
+    // Keep support for old stored alerts created before type was changed.
+    return notif.type === 'system:alert' || notif.type === 'system';
+  }
+
+  private systemAlertSettingKey(userId: string): string {
+    return `wz-system-alert-enabled:${userId}`;
+  }
+
+  private readSystemAlertSetting(userId: string): boolean {
+    try {
+      const raw = localStorage.getItem(this.systemAlertSettingKey(userId));
+      if (raw === null) return true;
+      return raw === '1';
+    } catch {
+      return true;
+    }
+  }
+
+  private writeSystemAlertSetting(enabled: boolean) {
+    const userId = this.user?._id;
+    if (!userId) return;
+    try {
+      localStorage.setItem(this.systemAlertSettingKey(userId), enabled ? '1' : '0');
+    } catch {
+      // Ignore storage write failures.
+    }
   }
 }

@@ -200,4 +200,14 @@ export class VoltPickupsComponent implements OnInit, OnDestroy {
     if (!url) return false;
     return /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url);
   }
+
+  getPickupImage(p: Pickup): string | null {
+    const primary = p?.mediaUrl || null;
+    if (primary && this.isImage(primary)) return primary;
+
+    const reportFirst = Array.isArray(p?.reportImages) ? p.reportImages[0] : null;
+    if (reportFirst && this.isImage(reportFirst)) return reportFirst;
+
+    return null;
+  }
 }

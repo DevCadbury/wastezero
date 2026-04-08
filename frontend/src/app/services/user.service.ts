@@ -18,6 +18,10 @@ export class UserService {
     return this.http.put<User>(`${this.apiUrl}/users/profile`, data);
   }
 
+  getSkillsCatalog(): Observable<string[]> {
+    return this.http.get<string[]>(`${this.apiUrl}/users/skills-catalog`);
+  }
+
   changePassword(data: { currentPassword: string; newPassword: string }): Observable<any> {
     return this.http.put(`${this.apiUrl}/users/change-password`, data);
   }

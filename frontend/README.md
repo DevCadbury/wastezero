@@ -57,3 +57,16 @@ Angular CLI does not come with an end-to-end testing framework by default. You c
 ## Additional Resources
 
 For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+
+## Runtime API Configuration (Separate Deployments)
+
+This frontend reads backend endpoints from `public/assets/runtime-config.js`:
+
+```js
+window.__WZ_CONFIG__ = {
+	API_URL: 'https://your-backend-domain.vercel.app/api',
+	SOCKET_URL: 'https://your-backend-domain.vercel.app'
+};
+```
+
+Update these values for each environment so frontend and backend can be hosted separately.

@@ -5,7 +5,7 @@
 
 <!-- Report tabs -->
 <div class="d-flex gap-2 mb-4 flex-wrap">
-  <button *ngFor="let tab of [{id:'users',label:'Users',icon:'bi-people'},{id:'pickups',label:'Pickups',icon:'bi-truck'},{id:'illegal-dumps',label:'Illegal Dump Audit',icon:'bi-exclamation-triangle'},{id:'waste',label:'Waste',icon:'bi-recycle'},{id:'volunteers',label:'Volunteers',icon:'bi-person-badge'},{id:'logs',label:'Activity Logs',icon:'bi-activity'}]; trackBy: trackByIndex"
+  <button *ngFor="let tab of [{id:'summary',label:'Summary',icon:'bi-bar-chart'},{id:'users',label:'Users',icon:'bi-people'},{id:'opportunities',label:'Opportunities',icon:'bi-briefcase'},{id:'applications',label:'Applications',icon:'bi-file-earmark-check'},{id:'pickups',label:'Pickups',icon:'bi-truck'},{id:'illegal-dumps',label:'Illegal Dump Audit',icon:'bi-exclamation-triangle'},{id:'waste',label:'Waste',icon:'bi-recycle'},{id:'volunteers',label:'Volunteers',icon:'bi-person-badge'},{id:'logs',label:'Activity Logs',icon:'bi-activity'}]; trackBy: trackByIndex"
     class="btn rounded-pill"
     [class.btn-success]="activeReport === tab.id"
     [class.btn-outline-secondary]="activeReport !== tab.id"
@@ -15,6 +15,49 @@
 </div>
 
 <div *ngIf="loading" class="text-center py-5"><div class="spinner-border text-success"></div></div>
+
+<!-- Milestone 4 Summary -->
+<ng-container *ngIf="activeReport === 'summary' && !loading">
+  <div class="row g-3 mb-3">
+    <div class="col-md-4">
+      <div class="stat-card h-100">
+        <h3>{{ summaryData?.users?.registeredUsers || 0 }}</h3>
+        <p>Registered Users</p>
+        <div class="text-muted" style="font-size:0.8rem">Volunteers: {{ summaryData?.users?.registeredVolunteers || 0 }}</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="stat-card accent h-100">
+        <h3>{{ summaryData?.opportunities?.total || 0 }}</h3>
+        <p>Opportunities</p>
+        <div class="text-muted" style="font-size:0.8rem">Active: {{ summaryData?.opportunities?.active || 0 }} · Completed: {{ summaryData?.opportunities?.completed || 0 }}</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="stat-card info h-100">
+        <h3>{{ summaryData?.applications?.total || 0 }}</h3>
+        <p>Applications</p>
+        <div class="text-muted" style="font-size:0.8rem">Accepted: {{ summaryData?.applications?.accepted || 0 }} · Rejected: {{ summaryData?.applications?.rejected || 0 }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card-wz">
+    <div class="card-wz-header"><h5>Monthly Application Trend</h5></div>
+    <div class="table-responsive" *ngIf="summaryData?.monthlyApplications?.length">
+      <table class="table-wz w-100">
+        <thead><tr><th>Month</th><th>Applications</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let m of summaryData.monthlyApplications; trackBy: trackByIndex">
+            <td>{{ m._id.year }}-{{ m._id.month | number:'2.0' }}</td>
+            <td>{{ m.total }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div *ngIf="!summaryData?.monthlyApplications?.length" class="text-muted text-center py-4">No monthly data yet</div>
+  </div>
+</ng-container>
 
 <!-- Users Report -->
 <ng-container *ngIf="activeReport === 'users' && !loading">
@@ -43,6 +86,109 @@
           </tr>
           <tr *ngIf="!filteredUsersData.length">
             <td colspan="6" class="text-center text-muted py-4">No users found</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</ng-container>
+
+<!-- Opportunities Report -->
+<ng-container *ngIf="activeReport === 'opportunities' && !loading">
+  <div class="card-wz">
+    <div class="card-wz-header">
+      <h5>Opportunity Report ({{ filteredOpportunitiesData.length }} opportunities)</h5>
+      <button class="btn-wz-primary btn-sm" (click)="exportCSV('opportunities')"><i class="bi bi-download me-1"></i>Export CSV</button>
+    </div>
+    <div class="row g-2 form-wz mb-2">
+      <div class="col-md-4 form-group mb-0">
+        <label>Search Opportunities</label>
+        <input type="text" [(ngModel)]="opportunitiesSearch" placeholder="Title, creator, location..." />
+      </div>
+      <div class="col-md-3 form-group mb-0">
+        <label>Status</label>
+        <select [(ngModel)]="opportunityStatusFilter">
+          <option value="">All</option>
+          <option value="open">Open</option>
+          <option value="in-progress">In Progress</option>
+          <option value="closed">Closed</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn-wz-outline w-100" (click)="opportunitiesSearch=''; opportunityStatusFilter=''">Clear</button>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table-wz w-100">
+        <thead><tr><th>Title</th><th>Creator</th><th>Status</th><th>Location</th><th>Applications</th><th>Created</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let o of filteredOpportunitiesData; trackBy: trackById">
+            <td class="fw-semibold">{{ o.title }}</td>
+            <td>{{ o.ngo_id?.name || o.ngo_id?.username || '-' }}</td>
+            <td><span class="badge text-white" [ngClass]="{'bg-success':o.status==='open','bg-warning text-dark':o.status==='in-progress','bg-secondary':o.status==='closed'}">{{ o.status | titlecase }}</span></td>
+            <td>{{ o.location }}</td>
+            <td>
+              <span class="text-success me-1">{{ o.applications?.accepted || 0 }} accepted</span>
+              <span class="text-warning me-1">{{ o.applications?.pending || 0 }} pending</span>
+              <span class="text-danger">{{ o.applications?.rejected || 0 }} rejected</span>
+            </td>
+            <td>{{ o.createdAt | date:'mediumDate' }}</td>
+          </tr>
+          <tr *ngIf="!filteredOpportunitiesData.length">
+            <td colspan="6" class="text-center text-muted py-4">No opportunities found</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</ng-container>
+
+<!-- Applications Report -->
+<ng-container *ngIf="activeReport === 'applications' && !loading">
+  <div class="card-wz">
+    <div class="card-wz-header">
+      <h5>Application Report ({{ filteredApplicationsData.length }} applications)</h5>
+      <button class="btn-wz-primary btn-sm" (click)="exportCSV('applications')"><i class="bi bi-download me-1"></i>Export CSV</button>
+    </div>
+    <div class="row g-2 form-wz mb-2">
+      <div class="col-md-4 form-group mb-0">
+        <label>Search</label>
+        <input type="text" [(ngModel)]="applicationsSearch" placeholder="Opportunity, volunteer, email..." />
+      </div>
+      <div class="col-md-3 form-group mb-0">
+        <label>Status</label>
+        <select [(ngModel)]="applicationStatusFilter">
+          <option value="">All</option>
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn-wz-primary w-100" (click)="applyApplicationFilters()">Apply</button>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn-wz-outline w-100" (click)="applicationsSearch=''; applicationStatusFilter=''; loadReport('applications')">Clear</button>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table-wz w-100">
+        <thead><tr><th>Opportunity</th><th>Volunteer</th><th>Status</th><th>Opportunity Status</th><th>Applied</th></tr></thead>
+        <tbody>
+          <tr *ngFor="let a of filteredApplicationsData; trackBy: trackById">
+            <td class="fw-semibold">{{ a.opportunity_id?.title || '-' }}</td>
+            <td>
+              <div>{{ a.volunteer_id?.name || '-' }}</div>
+              <small class="text-muted">{{ a.volunteer_id?.email || '-' }}</small>
+            </td>
+            <td>
+              <span class="badge" [class.bg-warning]="a.status==='pending'" [class.text-dark]="a.status==='pending'" [class.bg-success]="a.status==='accepted'" [class.bg-danger]="a.status==='rejected'">{{ a.status | titlecase }}</span>
+            </td>
+            <td>{{ a.opportunity_id?.status || '-' }}</td>
+            <td>{{ a.createdAt | date:'mediumDate' }}</td>
+          </tr>
+          <tr *ngIf="!filteredApplicationsData.length">
+            <td colspan="5" class="text-center text-muted py-4">No applications found</td>
           </tr>
         </tbody>
       </table>

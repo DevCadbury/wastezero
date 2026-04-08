@@ -12,7 +12,7 @@ router.post('/', volunteerOnly, ctrl.applyToOpportunity);
 // GET    /api/applications/my           — Volunteer's own applications
 router.get('/my', ctrl.getMyApplications);
 
-// GET    /api/applications/opportunity/:opportunityId — Admin lists apps for their opp
+// GET    /api/applications/opportunity/:opportunityId — Admin lists apps for an opportunity
 router.get('/opportunity/:opportunityId', adminOnly, ctrl.listApplicationsForOpportunity);
 
 // PUT    /api/applications/:applicationId/decide      — Admin accepts/rejects

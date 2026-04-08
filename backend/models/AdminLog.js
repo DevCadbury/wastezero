@@ -32,6 +32,7 @@ const adminLogSchema = new mongoose.Schema({
 
 // Index for sorted log queries
 adminLogSchema.index({ timestamp: -1 });
+adminLogSchema.index({ action: 1, timestamp: -1 });
 adminLogSchema.index({ user_id: 1, timestamp: -1 });
 adminLogSchema.index({ pickup_id: 1, timestamp: -1 });
 

@@ -3,6 +3,9 @@ import { isPlatformBrowser } from '@angular/common';
 import { Subject, Observable } from 'rxjs';
 import { AuthService } from './auth.service';
 import { io, Socket } from 'socket.io-client';
+import { environment } from '../../environments/environment';
+
+let sharedSocket: Socket | null = null;
 
 /**
  * Centralised Socket.IO service.
@@ -14,6 +17,7 @@ export class SocketService implements OnDestroy {
   private socket: Socket | null = null;
   private eventSubjects = new Map<string, Subject<any>>();
   private connected = false;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private auth: AuthService,
@@ -34,26 +38,34 @@ export class SocketService implements OnDestroy {
 
   /** Connect to Socket.IO server with JWT */
   connect(token: string): void {
-    if (this.socket?.connected) return;
+    const wsUrl = environment.socketUrl;
+    if (!sharedSocket) {
+      sharedSocket = io(wsUrl, {
+        autoConnect: false,
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 1000,
+      });
+    }
 
-    const wsUrl = 'http://localhost:5000';
+    this.socket = sharedSocket;
+    this.socket.auth = { token };
 
-    this.socket = io(wsUrl, {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
-    });
+    this.socket.off('connect');
+    this.socket.off('disconnect');
+    this.socket.off('connect_error');
 
     this.socket.on('connect', () => {
       this.connected = true;
       console.log('⚡ Socket connected');
+      this.startHeartbeat();
     });
 
-    this.socket.on('disconnect', () => {
+    this.socket.on('disconnect', (reason) => {
       this.connected = false;
-      console.log('⚡ Socket disconnected');
+      this.stopHeartbeat();
+      console.log('⚡ Socket disconnected:', reason);
     });
 
     this.socket.on('connect_error', (err: Error) => {
@@ -64,15 +76,19 @@ export class SocketService implements OnDestroy {
     this.eventSubjects.forEach((_, event) => {
       this.bindEvent(event);
     });
+
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
   }
 
   /** Disconnect from Socket.IO */
   disconnect(): void {
     if (this.socket) {
       this.socket.disconnect();
-      this.socket = null;
       this.connected = false;
     }
+    this.stopHeartbeat();
   }
 
   /** Listen to a specific event, returns Observable<T> */
@@ -121,5 +137,21 @@ export class SocketService implements OnDestroy {
         this.eventSubjects.get(event)?.next(data);
       });
     });
+  }
+
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.socket?.connected) {
+        this.socket.emit('client:heartbeat', { at: Date.now() });
+      }
+    }, 25000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 }

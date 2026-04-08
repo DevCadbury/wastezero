@@ -4,7 +4,8 @@ const http = require('http');
 const cors = require('cors');
 const compression = require('compression');
 const connectDB = require('./config/db');
-const { initSocket } = require('./socket');
+const { initSocket, getOnlineUsers } = require('./socket');
+const { corsOriginHandler, getAllowedOrigins } = require('./config/cors');
 
 // Connect to MongoDB
 connectDB();
@@ -21,11 +22,12 @@ app.use(compression({ threshold: 1024 }));
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:4200', 'http://localhost:3000'],
+  origin: corsOriginHandler,
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.set('trust proxy', 1);
 
 // Cache-Control helper — attach to read-only routes
 app.use((req, res, next) => {
@@ -58,6 +60,17 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', message: 'WasteZero API is running', timestamp: new Date() });
 });
 
+// Uptime monitor keepalive endpoint
+app.get('/api/keepalive', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({
+    status: 'alive',
+    uptimeSeconds: Math.round(process.uptime()),
+    timestamp: new Date(),
+    onlineUsers: getOnlineUsers().size,
+  });
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ message: `Route ${req.originalUrl} not found` });
@@ -76,6 +89,7 @@ if (!module.parent) {
   server.listen(PORT, () => {
     console.log(`WasteZero Server running on port ${PORT}`);
     console.log(`Environment: ${process.env.NODE_ENV}`);
+    console.log(`Allowed origins: ${getAllowedOrigins().join(', ')}`);
     console.log('Socket.IO ready for connections');
   });
   server.keepAliveTimeout = 65000;

@@ -20,10 +20,12 @@ function toSkillSet(skills = []) {
 function buildMatchMeta(opportunity, volunteerSkillsSet, volunteerLocation) {
   const oppSkills = Array.isArray(opportunity.requiredSkills) ? opportunity.requiredSkills : [];
   const oppSkillSet = toSkillSet(oppSkills);
+  const volunteerSkills = Array.from(volunteerSkillsSet);
 
   let skillMatches = 0;
   oppSkillSet.forEach((s) => {
-    if (volunteerSkillsSet.has(s)) skillMatches += 1;
+    const hasMatch = volunteerSkills.some((vs) => vs === s || vs.includes(s) || s.includes(vs));
+    if (hasMatch) skillMatches += 1;
   });
 
   const skillRatio = oppSkillSet.size ? skillMatches / oppSkillSet.size : 0;
@@ -90,7 +92,8 @@ exports.createOpportunity = async (req, res) => {
 
     await AdminLog.create({
       action: 'OPPORTUNITY_CREATED',
-      user_id: req.user._id,
+      user_id: opportunity.ngo_id,
+      performedBy: req.user._id,
       details: `Opportunity "${opportunity.title}" created by ${req.user.name}`,
     });
 
@@ -322,17 +325,12 @@ exports.getOpportunity = async (req, res) => {
   }
 };
 
-// ── PUT    Update opportunity (admin & owner only) ────────────────────────
+// ── PUT    Update opportunity (admin) ───────────────────────────────────────
 exports.updateOpportunity = async (req, res) => {
   try {
     const opp = await Opportunity.findById(req.params.id);
     if (!opp) return errorResponse(res, 404, 'Opportunity not found');
     if (opp.isDeleted) return errorResponse(res, 404, 'Opportunity not found');
-
-    // Ownership check
-    if (opp.ngo_id.toString() !== req.user._id.toString()) {
-      return errorResponse(res, 403, 'Only the creator can edit this opportunity');
-    }
 
     // Disallow changing ngo_id
     if (req.body.ngo_id && req.body.ngo_id !== opp.ngo_id.toString()) {
@@ -380,7 +378,8 @@ exports.updateOpportunity = async (req, res) => {
 
     await AdminLog.create({
       action: 'OPPORTUNITY_UPDATED',
-      user_id: req.user._id,
+      user_id: opp.ngo_id,
+      performedBy: req.user._id,
       details: `Opportunity "${updated.title}" updated by ${req.user.name}`,
     });
 
@@ -411,24 +410,20 @@ exports.updateOpportunity = async (req, res) => {
   }
 };
 
-// ── DELETE  Soft-delete opportunity (admin & owner only) ──────────────────
+// ── DELETE  Soft-delete opportunity (admin) ─────────────────────────────────
 exports.deleteOpportunity = async (req, res) => {
   try {
     const opp = await Opportunity.findById(req.params.id);
     if (!opp) return errorResponse(res, 404, 'Opportunity not found');
     if (opp.isDeleted) return errorResponse(res, 404, 'Opportunity already deleted');
 
-    // Ownership check
-    if (opp.ngo_id.toString() !== req.user._id.toString()) {
-      return errorResponse(res, 403, 'Only the creator can delete this opportunity');
-    }
-
     opp.isDeleted = true;
     await opp.save();
 
     await AdminLog.create({
       action: 'OPPORTUNITY_DELETED',
-      user_id: req.user._id,
+      user_id: opp.ngo_id,
+      performedBy: req.user._id,
       details: `Opportunity "${opp.title}" soft-deleted by ${req.user.name}`,
     });
 

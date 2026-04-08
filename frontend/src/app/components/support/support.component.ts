@@ -36,6 +36,7 @@ export class SupportComponent implements OnInit {
     { value: 'payment', label: 'Payment' },
     { value: 'bug', label: 'Bug Report' },
     { value: 'feature', label: 'Feature Request' },
+    { value: 'chat-report', label: 'Chat Report' },
     { value: 'other', label: 'Other' },
   ];
 

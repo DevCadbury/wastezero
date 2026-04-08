@@ -69,6 +69,9 @@
           <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
           Login
         </button>
+        <div class="text-end mt-2">
+          <a style="font-size:0.84rem;color:var(--wz-primary);cursor:pointer" (click)="navigateToForgotPassword()">Forgot password?</a>
+        </div>
         <p class="form-switch-text">Don't have an account? <a (click)="switchTab('register')">Create one</a></p>
       </form>
     </div>

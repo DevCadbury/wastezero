@@ -18,6 +18,31 @@
     <button [class.active]="filterStatus === 'closed'" (click)="setFilter('closed')">Closed</button>
   </div>
 
+  <div class="filter-tabs mb-4">
+    <button [class.active]="filterCategory === ''" (click)="setCategoryFilter('')">All Categories</button>
+    <button [class.active]="filterCategory === 'chat-report'" (click)="setCategoryFilter('chat-report')">Chat Reports</button>
+    <button [class.active]="filterCategory === 'pickup'" (click)="setCategoryFilter('pickup')">Pickup</button>
+    <button [class.active]="filterCategory === 'account'" (click)="setCategoryFilter('account')">Account</button>
+    <button [class.active]="filterCategory === 'bug'" (click)="setCategoryFilter('bug')">Bug</button>
+  </div>
+
+  <div class="card-wz mb-3">
+    <div class="row g-2 align-items-end form-wz">
+      <div class="col-md-5 form-group mb-0">
+        <label>Search Report</label>
+        <input type="text" [(ngModel)]="searchText" placeholder="Report ID, subject, or description" />
+      </div>
+      <div class="col-md-4 form-group mb-0">
+        <label>View By User</label>
+        <input type="text" [(ngModel)]="userFilter" placeholder="Name, email, username, or user ID" />
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button class="btn-wz-primary" (click)="applySearch()">Apply</button>
+        <button class="btn-wz-outline" (click)="clearSearch()">Clear</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Ticket list -->
   <div *ngIf="loading" class="text-center py-5"><div class="spinner-grow" style="color:var(--wz-primary)"></div></div>
   <div *ngIf="!loading && tickets.length === 0" class="empty-state">
@@ -32,12 +57,13 @@
             <span class="ticket-cat-badge">{{ getCategoryLabel(t.category) }}</span>
             <span [class]="statusColors[t.status]">{{ t.status }}</span>
             <span class="role-badge-sm" [class.role-vol]="t.role === 'volunteer'">{{ t.role }}</span>
+            <span *ngIf="t.reportId" class="badge bg-light text-dark border" style="font-size:0.72rem">{{ t.reportId }}</span>
           </div>
           <h6 class="ticket-subject">{{ t.subject }}</h6>
-          <div style="font-size:0.8rem;color:#64748b">
-            <i class="bi bi-person"></i>
-            <strong> {{ $any(t.user_id)?.name || 'Unknown' }}</strong>
-            ({{ $any(t.user_id)?.email || '' }})
+          <div style="font-size:0.8rem;color:#64748b" class="d-flex align-items-center gap-2">
+            <img *ngIf="$any(t.user_id)?.avatar" [src]="$any(t.user_id)?.avatar" alt="User" style="width:22px;height:22px;border-radius:50%;object-fit:cover;border:1px solid #e2e8f0" />
+            <i *ngIf="!$any(t.user_id)?.avatar" class="bi bi-person"></i>
+            <span><strong>{{ $any(t.user_id)?.name || 'Unknown' }}</strong> ({{ $any(t.user_id)?.email || '' }})</span>
           </div>
         </div>
         <div class="text-end" style="flex-shrink:0">
@@ -59,6 +85,7 @@
         <div class="d-flex gap-2 flex-wrap">
           <span class="ticket-cat-badge">{{ getCategoryLabel(activeTicket.category) }}</span>
           <span [class]="statusColors[activeTicket.status]">{{ activeTicket.status }}</span>
+          <span *ngIf="activeTicket.reportId" class="badge bg-light text-dark border" style="font-size:0.72rem">{{ activeTicket.reportId }}</span>
           <span style="font-size:0.78rem;color:#64748b">{{ $any(activeTicket.user_id)?.name }} ({{ activeTicket.role }})</span>
         </div>
       </div>
@@ -66,7 +93,8 @@
 
     <!-- Submitted-by card -->
     <div class="ticket-user-card mb-3">
-      <div class="ticket-user-avatar">{{ userInitials($any(activeTicket.user_id)?.name) }}</div>
+      <img *ngIf="$any(activeTicket.user_id)?.avatar" [src]="$any(activeTicket.user_id)?.avatar" alt="Reporter" class="ticket-user-avatar" style="object-fit:cover" />
+      <div *ngIf="!$any(activeTicket.user_id)?.avatar" class="ticket-user-avatar">{{ userInitials($any(activeTicket.user_id)?.name) }}</div>
       <div class="ticket-user-info">
         <div class="ticket-user-name">{{ $any(activeTicket.user_id)?.name || 'Unknown' }}</div>
         <div class="ticket-user-meta">
@@ -87,6 +115,14 @@
       <div class="col-lg-8">
         <div class="ticket-description-box">
           <p style="margin:0;white-space:pre-wrap">{{ activeTicket.description }}</p>
+
+          <div *ngIf="activeTicket.category === 'chat-report' && activeTicket.messageReport?.conversationSample" class="mt-3" style="background:#0f172a;color:#e2e8f0;border-radius:10px;padding:12px;max-height:260px;overflow:auto">
+            <div style="font-size:0.78rem;color:#93c5fd;font-weight:700;margin-bottom:8px">
+              Chat Session Snapshot
+            </div>
+            <pre style="margin:0;white-space:pre-wrap;font-size:0.76rem;line-height:1.35">{{ activeTicket.messageReport?.conversationSample }}</pre>
+          </div>
+
           <div *ngIf="activeTicket.mediaUrl" class="mt-2">
             <a *ngIf="isImage(activeTicket.mediaUrl)" [href]="activeTicket.mediaUrl" target="_blank">
               <img [src]="activeTicket.mediaUrl" class="ticket-img-thumb">
@@ -103,6 +139,7 @@
           <div class="reply-bubble" *ngFor="let r of activeTicket.replies"
                [class.reply-mine]="r.authorRole !== 'admin'" [class.reply-admin]="r.authorRole === 'admin'">
             <div class="reply-meta">
+              <img *ngIf="r.author_id.avatar" [src]="r.author_id.avatar" alt="Author" style="width:20px;height:20px;border-radius:50%;object-fit:cover;margin-right:6px;vertical-align:middle" />
               <strong>{{ r.author_id.name || 'Unknown' }}</strong>
               <span class="reply-role">{{ r.authorRole === 'admin' ? 'Support Agent' : 'User' }}</span>
               <span style="font-size:0.7rem;color:#94a3b8">{{ r.createdAt | date:'MMM d, h:mm a' }}</span>

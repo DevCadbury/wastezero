@@ -24,6 +24,26 @@
       <p class="text-muted mb-3" style="font-size:0.875rem">Update your personal information and profile details</p>
       <form (ngSubmit)="saveProfile()" class="form-wz">
         <div class="form-group">
+          <label>Profile Picture</label>
+          <div class="d-flex align-items-center gap-3">
+            <ng-container *ngIf="currentAvatar; else profileAvatarInitials">
+              <img [src]="currentAvatar || ''" alt="Profile picture" style="width:68px;height:68px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0">
+            </ng-container>
+            <ng-template #profileAvatarInitials>
+              <div style="width:68px;height:68px;border-radius:50%;background:var(--wz-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.2rem">{{ initials }}</div>
+            </ng-template>
+
+            <div class="d-flex flex-column gap-2">
+              <label class="btn-wz-outline" style="width:max-content;cursor:pointer">
+                <input type="file" hidden accept="image/*" (change)="onAvatarChange($event)">
+                <i class="bi bi-image me-1"></i>{{ user?.avatar ? 'Change Photo' : 'Upload Photo' }}
+              </label>
+              <button *ngIf="avatarFile" type="button" class="btn btn-sm btn-outline-danger" (click)="clearAvatarSelection()">Cancel New Photo</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
           <label>Full Name</label>
           <input type="text" [(ngModel)]="profileForm.name" name="name" />
         </div>
@@ -48,6 +68,59 @@
         <div class="form-group">
           <label>Bio</label>
           <textarea [(ngModel)]="profileForm.bio" name="bio" placeholder="Short description about yourself..."></textarea>
+        </div>
+
+        <div class="card-wz" style="background:#f8fafc;border:1px solid #e2e8f0;padding:14px 16px">
+          <div class="fw-bold mb-1" style="font-size:0.92rem">Email Notification Preferences</div>
+          <p class="text-muted mb-2" style="font-size:0.8rem">Choose which account updates you want to receive by email.</p>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="prefEnabled" [(ngModel)]="profileForm.emailPreferences.enabled" name="prefEnabled" />
+            <label class="form-check-label" for="prefEnabled">Enable all email notifications</label>
+          </div>
+          <div class="row g-2" style="font-size:0.84rem">
+            <div class="col-md-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="prefGeneral" [(ngModel)]="profileForm.emailPreferences.generalNotifications" name="prefGeneral" [disabled]="!profileForm.emailPreferences.enabled" />
+                <label class="form-check-label" for="prefGeneral">General updates</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="prefAlerts" [(ngModel)]="profileForm.emailPreferences.systemAlerts" name="prefAlerts" [disabled]="!profileForm.emailPreferences.enabled" />
+                <label class="form-check-label" for="prefAlerts">System alerts</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="prefMessages" [(ngModel)]="profileForm.emailPreferences.messages" name="prefMessages" [disabled]="!profileForm.emailPreferences.enabled" />
+                <label class="form-check-label" for="prefMessages">Chat messages</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="prefSupport" [(ngModel)]="profileForm.emailPreferences.support" name="prefSupport" [disabled]="!profileForm.emailPreferences.enabled" />
+                <label class="form-check-label" for="prefSupport">Support tickets</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="prefOpportunities" [(ngModel)]="profileForm.emailPreferences.opportunities" name="prefOpportunities" [disabled]="!profileForm.emailPreferences.enabled" />
+                <label class="form-check-label" for="prefOpportunities">Opportunities and applications</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="prefPickups" [(ngModel)]="profileForm.emailPreferences.pickups" name="prefPickups" [disabled]="!profileForm.emailPreferences.enabled" />
+                <label class="form-check-label" for="prefPickups">Pickup updates</label>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="prefSecurity" [(ngModel)]="profileForm.emailPreferences.security" name="prefSecurity" [disabled]="!profileForm.emailPreferences.enabled" />
+                <label class="form-check-label" for="prefSecurity">Security alerts</label>
+              </div>
+            </div>
+          </div>
         </div>
         <button type="submit" class="btn-wz-primary" [disabled]="loading">
           <span *ngIf="loading" class="spinner-border spinner-border-sm me-2"></span>
@@ -84,9 +157,14 @@
   <!-- Profile summary -->
   <div class="col-lg-4">
     <div class="card-wz text-center">
-      <div style="width:80px;height:80px;border-radius:50%;background:var(--wz-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.8rem;margin:0 auto 12px">
-        {{ initials }}
-      </div>
+      <ng-container *ngIf="user?.avatar; else summaryInitials">
+        <img [src]="user?.avatar || ''" alt="Profile picture" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;margin:0 auto 12px;display:block">
+      </ng-container>
+      <ng-template #summaryInitials>
+        <div style="width:80px;height:80px;border-radius:50%;background:var(--wz-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:1.8rem;margin:0 auto 12px">
+          {{ initials }}
+        </div>
+      </ng-template>
       <h5 class="fw-bold">{{ user?.name }}</h5>
       <span class="badge bg-success text-white text-capitalize" style="font-size:0.8rem">{{ user?.role }}</span>
       <hr />

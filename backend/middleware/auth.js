@@ -14,6 +14,14 @@ const protect = async (req, res, next) => {
       if (req.user.isSuspended) {
         return res.status(403).json({ message: 'Account suspended. Contact admin.' });
       }
+
+      // Keep lastSeen fresh for chat presence without blocking request flow.
+      const now = Date.now();
+      const lastSeenTs = req.user.lastSeen ? new Date(req.user.lastSeen).getTime() : 0;
+      if (now - lastSeenTs > 60 * 1000) {
+        User.updateOne({ _id: req.user._id }, { $set: { lastSeen: new Date(now) } }).catch(() => {});
+      }
+
       next();
     } catch (error) {
       return res.status(401).json({ message: 'Not authorized, token failed' });

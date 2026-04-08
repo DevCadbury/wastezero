@@ -15,6 +15,9 @@ export class AdminSupportComponent implements OnInit {
   total = 0;
   loading = true;
   filterStatus = '';
+  filterCategory = '';
+  searchText = '';
+  userFilter = '';
   page = 1;
 
   activeTicket: SupportTicket | null = null;
@@ -33,7 +36,7 @@ export class AdminSupportComponent implements OnInit {
     closed: 'badge-cancelled',
   };
 
-  categories = ['account', 'pickup', 'payment', 'bug', 'feature', 'other'];
+  categories = ['account', 'pickup', 'payment', 'bug', 'feature', 'chat-report', 'other'];
 
   constructor(private svc: SupportService, private cdr: ChangeDetectorRef) {}
 
@@ -41,13 +44,32 @@ export class AdminSupportComponent implements OnInit {
 
   load() {
     this.loading = true;
-    this.svc.allTickets({ status: this.filterStatus || undefined, page: this.page }).subscribe({
+    this.svc.allTickets({
+      status: this.filterStatus || undefined,
+      category: this.filterCategory || undefined,
+      page: this.page,
+      search: this.searchText || undefined,
+      user: this.userFilter || undefined,
+    }).subscribe({
       next: (r) => { this.tickets = r.tickets; this.total = r.total; this.loading = false; this.cdr.markForCheck(); },
       error: () => { this.loading = false; this.cdr.markForCheck(); },
     });
   }
 
   setFilter(s: string) { this.filterStatus = s; this.page = 1; this.load(); }
+
+  setCategoryFilter(category: string) { this.filterCategory = category; this.page = 1; this.load(); }
+
+  applySearch() {
+    this.page = 1;
+    this.load();
+  }
+
+  clearSearch() {
+    this.searchText = '';
+    this.userFilter = '';
+    this.applySearch();
+  }
 
   openTicket(t: SupportTicket) {
     this.svc.getTicket(t._id).subscribe({
@@ -104,7 +126,7 @@ export class AdminSupportComponent implements OnInit {
   }
 
   getCategoryLabel(val: string) {
-    const map: Record<string,string> = { account:'Account', pickup:'Pickup', payment:'Payment', bug:'Bug', feature:'Feature', other:'Other' };
+    const map: Record<string,string> = { account:'Account', pickup:'Pickup', payment:'Payment', bug:'Bug', feature:'Feature', 'chat-report':'Chat Report', other:'Other' };
     return map[val] || val;
   }
 

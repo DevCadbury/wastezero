@@ -94,6 +94,7 @@
           <div class="d-flex align-items-center gap-2 mb-1">
             <span class="ticket-cat-badge">{{ getCategoryLabel(t.category) }}</span>
             <span [class]="statusColors[t.status] + ' ms-1'">{{ t.status }}</span>
+            <span *ngIf="t.reportId" class="badge bg-light text-dark border" style="font-size:0.72rem">{{ t.reportId }}</span>
           </div>
           <h6 class="ticket-subject">{{ t.subject }}</h6>
           <p class="ticket-preview">{{ t.description | slice:0:120 }}{{ t.description.length > 120 ? '...' : '' }}</p>
@@ -117,6 +118,7 @@
         <div class="d-flex gap-2 mt-1">
           <span class="ticket-cat-badge">{{ getCategoryLabel(activeTicket.category) }}</span>
           <span [class]="statusColors[activeTicket.status]">{{ activeTicket.status }}</span>
+          <span *ngIf="activeTicket.reportId" class="badge bg-light text-dark border" style="font-size:0.72rem">{{ activeTicket.reportId }}</span>
         </div>
       </div>
     </div>
@@ -149,6 +151,7 @@
       <div class="reply-bubble" *ngFor="let r of activeTicket.replies"
            [class.reply-mine]="r.authorRole !== 'admin'" [class.reply-admin]="r.authorRole === 'admin'">
         <div class="reply-meta">
+          <img *ngIf="r.author_id.avatar" [src]="r.author_id.avatar" alt="Author" style="width:20px;height:20px;border-radius:50%;object-fit:cover;margin-right:6px;vertical-align:middle">
           <strong>{{ r.author_id.name || 'Unknown' }}</strong>
           <span class="reply-role">{{ r.authorRole === 'admin' ? 'Support Agent' : 'You' }}</span>
           <span style="font-size:0.7rem;color:#94a3b8">{{ r.createdAt | date:'MMM d, h:mm a' }}</span>

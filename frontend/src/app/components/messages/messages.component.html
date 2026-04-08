@@ -1,4 +1,5 @@
 <div class="page-content messages-page">
+  <div *ngIf="toast" class="wz-toast">{{ toast }}</div>
   <div class="chat-shell">
 
     <!-- Sidebar -->
@@ -20,10 +21,15 @@
             <span *ngIf="userSearchQuery.length < 2">Type at least 2 characters...</span>
           </div>
           <div class="user-search-item" *ngFor="let u of userSearchResults; trackBy: trackById" (click)="startConvWith(u)">
-            <div class="conv-avatar" style="width:32px;height:32px;font-size:0.75rem">{{ partnerInitials(u.name) }}</div>
+            <ng-container *ngIf="partnerAvatar(u) as avatar; else userSearchInitials">
+              <img [src]="avatar" alt="avatar" class="conv-avatar" style="width:32px;height:32px;font-size:0.75rem;object-fit:cover">
+            </ng-container>
+            <ng-template #userSearchInitials>
+              <div class="conv-avatar" style="width:32px;height:32px;font-size:0.75rem">{{ partnerInitials(u.name) }}</div>
+            </ng-template>
             <div>
               <div style="font-weight:600;font-size:0.85rem">{{ u.name }}</div>
-              <div style="font-size:0.75rem;color:#94a3b8">{{ u.role }}</div>
+              <div style="font-size:0.75rem;color:#94a3b8">{{ u.role }}<span *ngIf="isOnline(u)" style="color:#16a34a"> · online</span></div>
             </div>
           </div>
         </div>
@@ -44,10 +50,19 @@
           [class.active]="selectedConv?.partner?._id === c.partner?._id"
           (click)="selectConversation(c)"
         >
-          <div class="conv-avatar">{{ partnerInitials(c.partner?.name) }}</div>
+          <div class="avatar-presence-wrap">
+            <ng-container *ngIf="partnerAvatar(c.partner) as avatar; else convInitials">
+              <img [src]="avatar" alt="avatar" class="conv-avatar" style="object-fit:cover">
+            </ng-container>
+            <ng-template #convInitials>
+              <div class="conv-avatar">{{ partnerInitials(c.partner?.name) }}</div>
+            </ng-template>
+            <span *ngIf="isOnline(c.partner)" class="presence-dot" aria-label="Online" title="Online"></span>
+          </div>
           <div class="conv-item-body">
             <div class="conv-name-row">
               <span class="conv-name">{{ c.partner?.name }}</span>
+              <span *ngIf="isOnline(c.partner)" style="display:inline-flex;width:8px;height:8px;border-radius:50%;background:#16a34a"></span>
               <i *ngIf="c.locked" class="bi bi-lock-fill text-danger" title="Archived conversation"></i>
               <span class="conv-time">{{ c.lastMessage?.timestamp | date:'h:mm a' }}</span>
             </div>
@@ -58,6 +73,7 @@
               </span>
               <span *ngIf="c.unreadCount > 0" class="conv-unread-badge">{{ c.unreadCount }}</span>
             </div>
+            <div style="font-size:0.7rem;color:#94a3b8;margin-top:2px">{{ partnerStatus(c.partner) }}</div>
           </div>
         </div>
       </div>
@@ -76,10 +92,22 @@
           <button class="btn-back d-lg-none" (click)="selectedConv = null; messages = []">
             <i class="bi bi-arrow-left"></i>
           </button>
-          <div class="conv-avatar" style="width:38px;height:38px">{{ partnerInitials(selectedConv.partner?.name) }}</div>
+          <div class="avatar-presence-wrap">
+            <ng-container *ngIf="partnerAvatar(selectedConv.partner) as avatar; else selectedConvInitials">
+              <img [src]="avatar" alt="avatar" class="conv-avatar" style="width:38px;height:38px;object-fit:cover">
+            </ng-container>
+            <ng-template #selectedConvInitials>
+              <div class="conv-avatar" style="width:38px;height:38px">{{ partnerInitials(selectedConv.partner?.name) }}</div>
+            </ng-template>
+            <span *ngIf="isOnline(selectedConv.partner)" class="presence-dot" aria-label="Online" title="Online"></span>
+          </div>
           <div class="ms-2 flex-1">
             <div style="font-weight:700;font-size:0.95rem">{{ selectedConv.partner?.name }}</div>
-            <div style="font-size:0.75rem;color:#94a3b8;text-transform:capitalize">{{ selectedConv.partner?.role }}</div>
+            <div style="font-size:0.75rem;color:#94a3b8;text-transform:capitalize">
+              {{ selectedConv.partner?.role }}
+              <span *ngIf="isOnline(selectedConv.partner)" style="color:#16a34a"> · Online now</span>
+              <span *ngIf="!isOnline(selectedConv.partner)"> · {{ formatLastSeen(selectedConv.partner?.lastSeen) }}</span>
+            </div>
           </div>
           <span *ngIf="selectedConvLocked" class="badge bg-danger-subtle text-danger border border-danger-subtle">
             <i class="bi bi-lock-fill me-1"></i>Archived
@@ -87,38 +115,116 @@
         </div>
 
         <div *ngIf="selectedConvLocked" class="alert alert-warning py-2 px-3 mb-0 rounded-0" style="font-size:0.8rem">
-          <i class="bi bi-info-circle me-1"></i>{{ lockLabel(selectedConvLockAt) }}
+          <i class="bi bi-info-circle me-1"></i>{{ selectedConvLockReason || lockLabel(selectedConvLockAt) }}
         </div>
 
-        <div class="messages-list-new">
+        <div class="messages-list-new" #messagesList (scroll)="onMessagesScroll($event)">
+          <div *ngIf="messagesLoading" class="text-center py-4" style="color:#64748b;font-size:0.82rem">
+            <div class="spinner-border spinner-border-sm" style="color:var(--wz-primary)"></div>
+            <div class="mt-2">Loading recent messages...</div>
+          </div>
+
+          <div *ngIf="olderLoading" class="text-center py-2" style="color:#64748b;font-size:0.78rem">
+            <div class="spinner-border spinner-border-sm" style="color:var(--wz-primary)"></div>
+            <span class="ms-2">Loading older messages...</span>
+          </div>
+
           <div *ngIf="messages.length === 0" class="text-center py-5" style="color:#94a3b8;font-size:0.875rem">
             <i class="bi bi-chat-dots" style="font-size:2rem;display:block;margin-bottom:8px"></i>
             Start your conversation with {{ selectedConv.partner?.name }}
           </div>
 
-          <ng-container *ngFor="let msg of messages; trackBy: trackById">
+          <ng-container *ngFor="let msg of messages; trackBy: trackById; let i = index">
+            <div *ngIf="showArchiveDivider(i)" class="text-center my-3">
+              <span class="badge bg-warning-subtle text-warning border" style="font-size:0.74rem">
+                <i class="bi bi-lock-fill me-1"></i>Message archived because pickup chat window has expired.
+              </span>
+            </div>
+
             <div class="msg-wrapper" [class.msg-mine]="isMine(msg)" [class.msg-theirs]="!isMine(msg)">
-              <div *ngIf="!isMine(msg)" class="msg-avatar-sm">{{ partnerInitials(selectedConv.partner?.name) }}</div>
+              <ng-container *ngIf="!isMine(msg)">
+                <ng-container *ngIf="partnerAvatar(selectedConv.partner) as avatar; else msgInitials">
+                  <img [src]="avatar" alt="avatar" class="msg-avatar-sm" style="object-fit:cover">
+                </ng-container>
+                <ng-template #msgInitials>
+                  <div class="msg-avatar-sm">{{ partnerInitials(selectedConv.partner?.name) }}</div>
+                </ng-template>
+              </ng-container>
               <div class="msg-col">
                 <div *ngIf="msg.mediaUrl" class="msg-bubble" [class.bubble-mine]="isMine(msg)" [class.bubble-theirs]="!isMine(msg)">
-                  <a *ngIf="isImage(msg.mediaUrl)" [href]="msg.mediaUrl" target="_blank">
+                  <button *ngIf="isImage(msg.mediaUrl)" type="button" style="border:none;background:none;padding:0" (click)="openMediaViewer(msg)">
                     <img [src]="msg.mediaUrl" class="msg-media-img" alt="Attachment">
-                  </a>
-                  <video *ngIf="msg.mediaType === 'video'" [src]="msg.mediaUrl" controls class="msg-media-img"></video>
-                  <a *ngIf="msg.mediaType === 'file'" [href]="msg.mediaUrl" target="_blank" class="msg-file-link">
-                    <i class="bi bi-file-earmark-arrow-down"></i> Download File
-                  </a>
+                  </button>
+                  <button *ngIf="msg.mediaType === 'video'" type="button" style="border:none;background:none;padding:0" (click)="openMediaViewer(msg)">
+                    <video [src]="msg.mediaUrl" class="msg-media-img" muted></video>
+                  </button>
+                  <button *ngIf="msg.mediaType === 'file'" type="button" class="msg-file-link" (click)="openMediaViewer(msg)">
+                    <i class="bi bi-file-earmark-text"></i> Open File Preview
+                  </button>
                 </div>
-                <div *ngIf="msg.content" class="msg-bubble" [class.bubble-mine]="isMine(msg)" [class.bubble-theirs]="!isMine(msg)">
+                <div *ngIf="editingMessageId === msg._id" class="msg-bubble" [class.bubble-mine]="isMine(msg)" [class.bubble-theirs]="!isMine(msg)">
+                  <textarea [(ngModel)]="editingContent" rows="2" style="width:100%;border-radius:8px;border:1px solid #cbd5e1;padding:6px 8px"></textarea>
+                  <div class="d-flex justify-content-end gap-2 mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" (click)="cancelEditMessage()">Cancel</button>
+                    <button type="button" class="btn btn-sm btn-success" (click)="saveEditedMessage(msg)">Save</button>
+                  </div>
+                </div>
+
+                <div *ngIf="msg.content && editingMessageId !== msg._id" class="msg-bubble" [class.bubble-mine]="isMine(msg)" [class.bubble-theirs]="!isMine(msg)"
+                     [style.opacity]="msg.isDeleted ? 0.75 : 1"
+                     [style.fontStyle]="msg.isDeleted ? 'italic' : 'normal'">
                   {{ msg.content }}
+                  <span *ngIf="msg.editedAt && !msg.isDeleted" style="font-size:0.68rem;opacity:0.75;margin-left:6px">(edited)</span>
                 </div>
+
+                <div *ngIf="groupedReactions(msg).length" class="d-flex flex-wrap gap-1 mt-1">
+                  <button type="button"
+                          class="btn btn-sm px-2 py-0"
+                          *ngFor="let r of groupedReactions(msg)"
+                          [class.btn-primary]="r.mine"
+                          [class.btn-light]="!r.mine"
+                          style="border-radius:999px;font-size:0.72rem"
+                          (click)="reactToMessage(msg, r.emoji)">
+                    {{ r.emoji }} {{ r.count }}
+                  </button>
+                </div>
+
+                <div class="d-flex gap-1 mt-1" *ngIf="!selectedConvLocked">
+                  <button *ngFor="let emoji of reactionOptions"
+                          type="button"
+                          class="btn btn-sm btn-light px-2 py-0"
+                          style="font-size:0.75rem;border-radius:999px"
+                          (click)="reactToMessage(msg, emoji)">{{ emoji }}</button>
+                </div>
+
                 <div class="msg-meta" [class.text-end]="isMine(msg)">
                   {{ msg.timestamp | date:'h:mm a' }}
                   <i *ngIf="isMine(msg)" class="bi ms-1"
                      [class.bi-check2-all]="msg.isRead"
                      [class.bi-check2]="!msg.isRead"
-                     [style.color]="msg.isRead ? '#4caf50' : '#94a3b8'"
+                     [style.color]="msg.isRead ? '#2563eb' : '#94a3b8'"
                      style="font-size:0.75rem"></i>
+                  <button type="button"
+                          class="btn btn-link btn-sm p-0 ms-2"
+                          *ngIf="!isMine(msg)"
+                          style="font-size:0.72rem;text-decoration:none"
+                          (click)="openReportDialog(msg)">
+                    Report
+                  </button>
+                  <button type="button"
+                          class="btn btn-link btn-sm p-0 ms-2"
+                          *ngIf="isMine(msg) && canModifyMessage(msg) && editingMessageId !== msg._id"
+                          style="font-size:0.72rem;text-decoration:none"
+                          (click)="startEditMessage(msg)">
+                    Edit
+                  </button>
+                  <button type="button"
+                          class="btn btn-link btn-sm p-0 ms-2 text-danger"
+                          *ngIf="isMine(msg) && canModifyMessage(msg)"
+                          style="font-size:0.72rem;text-decoration:none"
+                          (click)="deleteMessage(msg)">
+                    Delete
+                  </button>
                 </div>
               </div>
             </div>
@@ -160,5 +266,78 @@
         </div>
       </ng-container>
     </div>
+  </div>
+</div>
+
+<!-- Internal Media Viewer -->
+<div *ngIf="mediaViewer" class="wz-system-alert-backdrop" (click)="closeMediaViewer()"></div>
+<div *ngIf="mediaViewer" class="wz-system-alert-dialog" style="width:min(96vw,900px);max-height:88vh;overflow:hidden" role="dialog" aria-modal="true" aria-label="Media Preview" (click)="$event.stopPropagation()">
+  <div class="wz-system-alert-header">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-images"></i>
+      <span>Media Preview</span>
+    </div>
+    <button class="btn btn-sm btn-link text-secondary p-0" aria-label="Close" (click)="closeMediaViewer()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <div class="wz-system-alert-body" style="display:flex;justify-content:center;align-items:center;min-height:260px;max-height:70vh;overflow:auto;background:#0f172a">
+    <img *ngIf="mediaViewer.type === 'image'" [src]="mediaViewer.url" alt="Preview" style="max-width:100%;max-height:65vh;object-fit:contain;border-radius:8px" />
+    <video *ngIf="mediaViewer.type === 'video'" [src]="mediaViewer.url" controls autoplay style="max-width:100%;max-height:65vh;border-radius:8px"></video>
+    <iframe *ngIf="mediaViewer.type === 'file'" [src]="mediaViewer.safeUrl" title="File Preview" style="width:100%;height:64vh;border:none;border-radius:8px;background:#fff"></iframe>
+  </div>
+  <div class="wz-system-alert-footer">
+    <button class="btn-wz-primary" (click)="closeMediaViewer()">Close</button>
+  </div>
+</div>
+
+<!-- Report Message Dialog -->
+<div *ngIf="reportDialogOpen" class="wz-system-alert-backdrop" (click)="closeReportDialog()"></div>
+<div *ngIf="reportDialogOpen" class="wz-system-alert-dialog" role="dialog" aria-modal="true" aria-label="Report Message" (click)="$event.stopPropagation()">
+  <div class="wz-system-alert-header">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-flag-fill text-danger"></i>
+      <span>Report Message</span>
+    </div>
+    <button class="btn btn-sm btn-link text-secondary p-0" aria-label="Close" (click)="closeReportDialog()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <div class="wz-system-alert-body">
+    <div class="mb-3" *ngIf="reportTargetMessage">
+      <label style="font-weight:600">Message Preview</label>
+      <div style="margin-top:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;font-size:0.84rem;color:#334155;max-height:90px;overflow:auto">
+        {{ reportTargetMessage?.content || (reportTargetMessage?.mediaUrl ? 'Attachment message' : 'No text content') }}
+      </div>
+    </div>
+
+    <div class="form-group mb-3">
+      <label style="font-weight:600">Reason *</label>
+      <div class="d-flex flex-wrap gap-2 mt-2 mb-2">
+        <button type="button"
+                *ngFor="let option of reportReasonOptions; trackBy: trackByIndex"
+                class="btn btn-sm rounded-pill"
+                [class.btn-danger]="reportReason === option"
+                [class.btn-outline-secondary]="reportReason !== option"
+                (click)="selectReportReason(option)">
+          {{ option }}
+        </button>
+      </div>
+      <input type="text" [(ngModel)]="reportReason" placeholder="Or enter a custom reason" maxlength="120" />
+    </div>
+    <div class="form-group mb-0">
+      <label style="font-weight:600">Details (optional)</label>
+      <textarea rows="3" [(ngModel)]="reportDetails" placeholder="Add context for admin review" maxlength="500"></textarea>
+      <div style="font-size:0.74rem;color:#64748b;text-align:right;margin-top:4px">{{ reportDetails.length }}/500</div>
+    </div>
+    <div style="font-size:0.76rem;color:#64748b;margin-top:10px">
+      Reports are reviewed by admin support. False reporting may lead to account restrictions.
+    </div>
+  </div>
+  <div class="wz-system-alert-footer">
+    <button class="btn-wz-outline" (click)="closeReportDialog()" [disabled]="reportSubmitting">Cancel</button>
+    <button class="btn-wz-primary" (click)="submitReportDialog()" [disabled]="reportSubmitting || !reportReason.trim()">
+      {{ reportSubmitting ? 'Submitting...' : 'Submit Report' }}
+    </button>
   </div>
 </div>

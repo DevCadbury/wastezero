@@ -12,6 +12,7 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const User = require('./models/User');
+const { getAllowedOrigins } = require('./config/cors');
 
 let io = null;
 
@@ -35,7 +36,7 @@ function rateLimit(socket, event, windowMs = 1000, max = 5) {
 function initSocket(httpServer) {
   io = new Server(httpServer, {
     cors: {
-      origin: ['http://localhost:4200', 'http://localhost:3000'],
+      origin: getAllowedOrigins(),
       credentials: true,
     },
     pingInterval: 25000,
@@ -74,6 +75,8 @@ function initSocket(httpServer) {
     if (!onlineUsers.has(userId)) onlineUsers.set(userId, new Set());
     onlineUsers.get(userId).add(socket.id);
 
+    User.updateOne({ _id: userId }, { $set: { lastSeen: new Date() } }).catch(() => {});
+
     // Join personal room
     socket.join(`user:${userId}`);
     socket.join(`role:${role}`);
@@ -98,6 +101,10 @@ function initSocket(httpServer) {
       });
     });
 
+    socket.on('client:heartbeat', () => {
+      socket.emit('server:heartbeat', { at: Date.now() });
+    });
+
     // ── Search: real-time presence ──────────────────────────────────────
     socket.on('opportunity:join', (oppId) => {
       if (oppId) socket.join(`opportunity:${oppId}`);
@@ -107,13 +114,14 @@ function initSocket(httpServer) {
     });
 
     // ── Disconnect ──────────────────────────────────────────────────────
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       const sockets = onlineUsers.get(userId);
       if (sockets) {
         sockets.delete(socket.id);
         if (sockets.size === 0) onlineUsers.delete(userId);
       }
-      console.log(`⚡ Socket disconnected: ${socket.user.name} [${socket.id}]`);
+      User.updateOne({ _id: userId }, { $set: { lastSeen: new Date() } }).catch(() => {});
+      console.log(`⚡ Socket disconnected: ${socket.user.name} [${socket.id}] reason=${reason}`);
     });
   });
 

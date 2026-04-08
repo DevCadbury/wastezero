@@ -86,20 +86,37 @@
 </div>
 
 <!-- Message Modal -->
-<div *ngIf="msgModal" class="modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center">
-  <div class="card-wz" style="width:440px;max-width:95vw">
-    <h5 class="fw-bold mb-3">Send Message to {{ msgModal.receiverName }}</h5>
-    <div class="form-group form-wz">
+<div *ngIf="msgModal" class="wz-system-alert-backdrop" (click)="closeMsgModal()"></div>
+<div *ngIf="msgModal" class="wz-system-alert-dialog" style="width:min(94vw,560px)" role="dialog" aria-modal="true" aria-label="Send Message" (click)="$event.stopPropagation()">
+  <div class="wz-system-alert-header">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-chat-dots-fill" style="color:#0f766e"></i>
+      <span>Message {{ msgModal.receiverName }}</span>
+    </div>
+    <button class="btn btn-sm btn-link text-secondary p-0" aria-label="Close" (click)="closeMsgModal()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="wz-system-alert-body form-wz">
+    <div class="text-muted mb-2" style="font-size:0.82rem">Pickup: {{ msgModal.pickup.title }}</div>
+    <div class="form-group mb-0">
       <label>Message</label>
-      <textarea [(ngModel)]="msgContent" rows="3" placeholder="Type your message..."></textarea>
+      <textarea [(ngModel)]="msgContent" rows="4" maxlength="1000" placeholder="Write your message..." style="resize:none"></textarea>
     </div>
-    <div class="d-flex gap-2 justify-content-end">
-      <button class="btn-wz-outline" (click)="msgModal = null">Cancel</button>
-      <button class="btn-wz-primary" (click)="sendMessage()" [disabled]="msgSending || !msgContent.trim()">
-        <span *ngIf="msgSending" class="spinner-border spinner-border-sm me-1"></span>
-        Send
-      </button>
+    <div class="d-flex justify-content-between mt-2" style="font-size:0.75rem;color:#94a3b8">
+      <span>Conversation follows pickup messaging rules.</span>
+      <span>{{ msgContent.length }}/1000</span>
     </div>
+    <div *ngIf="msgError" class="alert-wz error mt-2 mb-0">{{ msgError }}</div>
+  </div>
+
+  <div class="wz-system-alert-footer">
+    <button class="btn-wz-outline" (click)="closeMsgModal()">Cancel</button>
+    <button class="btn-wz-primary" (click)="sendMessage()" [disabled]="msgSending || !msgContent.trim()">
+      <span *ngIf="msgSending" class="spinner-border spinner-border-sm me-1"></span>
+      {{ msgSending ? 'Sending...' : 'Send Message' }}
+    </button>
   </div>
 </div>
 

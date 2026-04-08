@@ -11,12 +11,15 @@ import { AdminService } from '../../../services/admin.service';
   templateUrl: './admin-reports.component.html',
 })
 export class AdminReportsComponent implements OnInit {
-  activeReport = 'users';
+  activeReport = 'summary';
   loading = false;
 
+  summaryData: any = null;
   usersData: any[] = [];
   pickupsData: any[] = [];
   volunteersData: any[] = [];
+  opportunitiesData: any[] = [];
+  applicationsData: any[] = [];
   wasteData: any = {};
   logs: any[] = [];
   illegalDumpData: any[] = [];
@@ -26,6 +29,10 @@ export class AdminReportsComponent implements OnInit {
   pickupStatusFilter = '';
   pickupTypeFilter = '';
   volunteersSearch = '';
+  opportunitiesSearch = '';
+  opportunityStatusFilter = '';
+  applicationsSearch = '';
+  applicationStatusFilter = '';
   illegalDumpSearch = '';
   illegalDumpApprovalFilter = '';
 
@@ -36,14 +43,26 @@ export class AdminReportsComponent implements OnInit {
 
   constructor(private adminService: AdminService, private cdr: ChangeDetectorRef) {}
 
-  ngOnInit() { this.loadReport('users'); }
+  ngOnInit() { this.loadReport('summary'); }
 
   loadReport(type: string) {
     this.activeReport = type;
     this.loading = true;
     switch (type) {
+      case 'summary':
+        this.adminService.getSummaryReport().subscribe({ next: d => { this.summaryData = d; this.loading = false; this.cdr.markForCheck(); }, error: () => { this.loading = false; this.cdr.markForCheck(); } });
+        break;
       case 'users':
         this.adminService.getUserReport().subscribe({ next: d => { this.usersData = d; this.loading = false; this.cdr.markForCheck(); }, error: () => { this.loading = false; } });
+        break;
+      case 'opportunities':
+        this.adminService.getOpportunityReport().subscribe({ next: d => { this.opportunitiesData = d; this.loading = false; this.cdr.markForCheck(); }, error: () => { this.loading = false; this.cdr.markForCheck(); } });
+        break;
+      case 'applications':
+        this.adminService.getApplicationReport({
+          status: this.applicationStatusFilter || undefined,
+          search: this.applicationsSearch || undefined,
+        }).subscribe({ next: d => { this.applicationsData = d; this.loading = false; this.cdr.markForCheck(); }, error: () => { this.loading = false; this.cdr.markForCheck(); } });
         break;
       case 'pickups':
         this.adminService.getPickupReport().subscribe({ next: d => { this.pickupsData = d; this.loading = false; this.cdr.markForCheck(); }, error: () => { this.loading = false; } });
@@ -89,6 +108,33 @@ export class AdminReportsComponent implements OnInit {
         data = this.filteredVolunteersData.map(v => ({ Name: v.name, Email: v.email, Location: v.location || '', AcceptedPickups: v.acceptedPickups, CompletedPickups: v.completedPickups, TotalCompleted: v.totalPickupsCompleted || 0 }));
         headers = ['Name', 'Email', 'Location', 'AcceptedPickups', 'CompletedPickups', 'TotalCompleted'];
         filename = 'volunteers_report';
+        break;
+      case 'opportunities':
+        data = this.filteredOpportunitiesData.map(o => ({
+          Title: o.title,
+          Creator: o.ngo_id?.name || o.ngo_id?.username || '',
+          Location: o.location,
+          Status: o.status,
+          TotalApplications: o.applications?.total || 0,
+          Accepted: o.applications?.accepted || 0,
+          Pending: o.applications?.pending || 0,
+          Rejected: o.applications?.rejected || 0,
+          CreatedAt: new Date(o.createdAt).toLocaleDateString(),
+        }));
+        headers = ['Title', 'Creator', 'Location', 'Status', 'TotalApplications', 'Accepted', 'Pending', 'Rejected', 'CreatedAt'];
+        filename = 'opportunities_report';
+        break;
+      case 'applications':
+        data = this.filteredApplicationsData.map(a => ({
+          Opportunity: a.opportunity_id?.title || '',
+          Volunteer: a.volunteer_id?.name || '',
+          Email: a.volunteer_id?.email || '',
+          Status: a.status,
+          OpportunityStatus: a.opportunity_id?.status || '',
+          AppliedAt: new Date(a.createdAt).toLocaleDateString(),
+        }));
+        headers = ['Opportunity', 'Volunteer', 'Email', 'Status', 'OpportunityStatus', 'AppliedAt'];
+        filename = 'applications_report';
         break;
       default:
         return;
@@ -148,6 +194,34 @@ export class AdminReportsComponent implements OnInit {
       (v.email || '').toLowerCase().includes(q) ||
       (v.location || '').toLowerCase().includes(q)
     );
+  }
+
+  get filteredOpportunitiesData(): any[] {
+    const q = this.opportunitiesSearch.trim().toLowerCase();
+    return this.opportunitiesData.filter((o) => {
+      const textOk = !q ||
+        (o.title || '').toLowerCase().includes(q) ||
+        (o.location || '').toLowerCase().includes(q) ||
+        (o.ngo_id?.name || '').toLowerCase().includes(q);
+      const statusOk = !this.opportunityStatusFilter || o.status === this.opportunityStatusFilter;
+      return textOk && statusOk;
+    });
+  }
+
+  get filteredApplicationsData(): any[] {
+    const q = this.applicationsSearch.trim().toLowerCase();
+    return this.applicationsData.filter((a) => {
+      const textOk = !q ||
+        (a.opportunity_id?.title || '').toLowerCase().includes(q) ||
+        (a.volunteer_id?.name || '').toLowerCase().includes(q) ||
+        (a.volunteer_id?.email || '').toLowerCase().includes(q);
+      const statusOk = !this.applicationStatusFilter || a.status === this.applicationStatusFilter;
+      return textOk && statusOk;
+    });
+  }
+
+  applyApplicationFilters() {
+    this.loadReport('applications');
   }
 
   get filteredIllegalDumpData(): any[] {

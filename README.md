@@ -40,6 +40,16 @@ Frontend opens at **http://localhost:4200**
 
 ---
 
+## Milestone 4 Highlights
+- Admin dashboard now includes users, volunteers, opportunities, applications, active/completed opportunity metrics.
+- User activity monitoring now includes role, location, applications, accepted/rejected rates, and participation counts.
+- Opportunity monitoring now supports full admin visibility across all opportunities with application totals by status.
+- Administrative controls now include user blocking/unblocking and system alert broadcasting to selected audiences.
+- Reporting now includes Milestone 4 summary + dedicated opportunity/application reports with CSV export.
+- Deployment readiness improved for separate frontend/backend hosting with runtime-configurable API and Socket URLs.
+
+---
+
 ## Project Structure
 ```
 waste/
@@ -83,6 +93,15 @@ waste/
 | PUT | `/api/pickups/:id/complete` | Vol/Admin | Complete + update stats |
 | GET | `/api/admin/stats` | Admin | Platform overview |
 | GET | `/api/admin/reports/*` | Admin | Reports + CSV export |
+| GET | `/api/admin/activity/users` | Admin | User and volunteer activity monitoring |
+| GET | `/api/admin/opportunities` | Admin | Monitor all opportunities + application stats |
+| PUT | `/api/admin/opportunities/:id` | Admin | Admin edit opportunity details |
+| DELETE | `/api/admin/opportunities/:id` | Admin | Remove inappropriate opportunity |
+| PUT | `/api/admin/users/:id/block` | Admin | Block/unblock user |
+| POST | `/api/admin/alerts/broadcast` | Admin | Send system alert notifications |
+| GET | `/api/admin/reports/summary` | Admin | Milestone 4 summary report |
+| GET | `/api/admin/reports/opportunities` | Admin | Opportunity report with application metrics |
+| GET | `/api/admin/reports/applications` | Admin | Application report (pending/accepted/rejected) |
 
 ### Milestone 2 — Opportunity & Application APIs
 | Method | URL | Auth | Description |
@@ -90,12 +109,12 @@ waste/
 | POST | `/api/opportunities` | Admin | Create opportunity |
 | GET | `/api/opportunities` | JWT | List opportunities (role-aware, paginated) |
 | GET | `/api/opportunities/:id` | JWT | Get single opportunity |
-| PUT | `/api/opportunities/:id` | Admin (owner) | Update opportunity |
-| DELETE | `/api/opportunities/:id` | Admin (owner) | Soft-delete opportunity |
+| PUT | `/api/opportunities/:id` | Admin | Update opportunity |
+| DELETE | `/api/opportunities/:id` | Admin | Soft-delete opportunity |
 | POST | `/api/applications` | Volunteer | Apply to opportunity |
 | GET | `/api/applications/my` | Volunteer | My applications |
-| GET | `/api/applications/opportunity/:id` | Admin (owner) | List apps for opportunity |
-| PUT | `/api/applications/:id/decide` | Admin (owner) | Accept/reject application |
+| GET | `/api/applications/opportunity/:id` | Admin | List apps for opportunity |
+| PUT | `/api/applications/:id/decide` | Admin | Accept/reject application |
 
 ### Milestone 3 — Real-time, Notifications, Search
 | Method | URL | Auth | Description |
@@ -133,9 +152,49 @@ cd backend
 npm test
 ```
 
-57 integration tests across 2 suites:
-- **Milestone 2** (33 tests): Opportunity CRUD, Application workflow, ownership enforcement, E2E flows
-- **Milestone 3** (24 tests): Notification API, Universal Search, Socket.IO auth, real-time event integration
+Use the full manual system validation checklist for Milestone 4 integration:
+
+- [docs/MILESTONE4_SYSTEM_TESTING.md](docs/MILESTONE4_SYSTEM_TESTING.md)
+
+For frontend checks:
+
+```bash
+cd frontend
+npm run build
+```
+
+For backend syntax and startup checks:
+
+```bash
+cd backend
+node --check server.js
+npm run dev
+```
+
+---
+
+## Separate Vercel Deployment Notes
+
+### Backend (Vercel Project: backend)
+- Deploy from `backend` folder.
+- `vercel.json` routes all requests to Express entrypoint.
+- Required environment variables:
+    - `MONGO_URI`
+    - `JWT_SECRET`
+    - `FRONTEND_URL` (comma-separated allowed frontend origins, optional)
+    - `CORS_ORIGINS` (additional comma-separated origins, optional)
+
+### Frontend (Vercel Project: frontend)
+- Deploy from `frontend` folder.
+- `vercel.json` serves built Angular output as SPA.
+- Runtime API/socket endpoints are read from:
+    - `frontend/public/assets/runtime-config.js`
+    - Global object: `window.__WZ_CONFIG__`
+- Update runtime config for production:
+    - `API_URL`: e.g. `https://your-backend-domain.vercel.app/api`
+    - `SOCKET_URL`: e.g. `https://your-backend-domain.vercel.app`
+
+This setup keeps frontend and backend fully decoupled while preserving real-time + authenticated API integration.
 
 ---
 

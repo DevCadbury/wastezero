@@ -16,7 +16,12 @@
     </div>
 
     <div class="sidebar-user" *ngIf="user">
-      <div class="avatar">{{ initials }}</div>
+      <ng-container *ngIf="user.avatar; else sidebarInitials">
+        <img [src]="user.avatar || ''" alt="Profile" class="avatar" style="object-fit:cover" />
+      </ng-container>
+      <ng-template #sidebarInitials>
+        <div class="avatar">{{ initials }}</div>
+      </ng-template>
       <div class="user-info">
         <div class="user-name">{{ user.name }}</div>
         <div class="user-role">{{ user.role }}</div>
@@ -217,22 +222,49 @@
               <span class="fw-bold" style="font-size:0.9rem">Notifications</span>
               <button *ngIf="unreadCount > 0" class="btn btn-sm btn-link p-0 text-success" (click)="markAllRead()">Mark all read</button>
             </div>
+            <div class="d-flex align-items-center justify-content-between px-3 py-2" style="border-bottom:1px solid #eef2f7;background:#fff" title="Turn on to show immediate popup dialogs for new system alerts. Turn off to keep alerts in the list only.">
+              <div style="font-size:0.76rem;color:#64748b">
+                <i class="bi bi-megaphone me-1 text-danger"></i>System Alert Popups
+              </div>
+              <div class="form-check form-switch mb-0" title="Enable or disable automatic system alert popups">
+                <input class="form-check-input" type="checkbox" [checked]="systemAlertsEnabled" (change)="toggleSystemAlertSetting($any($event.target).checked)" />
+              </div>
+            </div>
+            <div class="d-flex gap-1 px-2 pt-2 pb-1" style="border-bottom:1px solid #eef2f7;background:#f8fafc">
+              <button class="btn btn-sm rounded-pill"
+                      [class.btn-success]="notificationFilter === 'all'"
+                      [class.btn-outline-secondary]="notificationFilter !== 'all'"
+                      style="font-size:0.72rem"
+                      (click)="notificationFilter = 'all'">All</button>
+              <button class="btn btn-sm rounded-pill"
+                      [class.btn-success]="notificationFilter === 'alerts'"
+                      [class.btn-outline-secondary]="notificationFilter !== 'alerts'"
+                      style="font-size:0.72rem"
+                      (click)="notificationFilter = 'alerts'">Alerts</button>
+              <button class="btn btn-sm rounded-pill"
+                      [class.btn-success]="notificationFilter === 'messages'"
+                      [class.btn-outline-secondary]="notificationFilter !== 'messages'"
+                      style="font-size:0.72rem"
+                      (click)="notificationFilter = 'messages'">Messages</button>
+              <span class="ms-auto text-muted" style="font-size:0.72rem;align-self:center;padding-right:6px">{{ filteredUnreadCount }} unread</span>
+            </div>
             <div class="notif-list">
-              <div *ngIf="notifications.length === 0" class="text-center py-4 text-muted" style="font-size:0.85rem">
+              <div *ngIf="filteredNotifications.length === 0" class="text-center py-4 text-muted" style="font-size:0.85rem">
                 <i class="bi bi-bell-slash d-block fs-4 mb-2"></i>No notifications yet
               </div>
-              <div *ngFor="let n of notifications"
+              <div *ngFor="let n of filteredNotifications"
                    class="notif-item"
                    [class.unread]="!n.isRead"
                    (click)="markNotifRead(n)">
                 <div class="d-flex align-items-start gap-2">
                   <i class="bi"
-                     [ngClass]="{'bi-check-circle text-success': n.type.includes('accepted'),
+                     [ngClass]="{'bi-megaphone-fill text-danger': n.type === 'system:alert' || n.type === 'system',
+                                 'bi-check-circle text-success': n.type.includes('accepted'),
                                  'bi-x-circle text-danger': n.type.includes('rejected'),
                                  'bi-chat-dots text-primary': n.type.includes('chat'),
                                  'bi-briefcase text-warning': n.type.includes('opportunity'),
                                  'bi-file-earmark text-info': n.type.includes('application') && !n.type.includes('accepted') && !n.type.includes('rejected'),
-                                 'bi-bell text-secondary': !n.type.includes('accepted') && !n.type.includes('rejected') && !n.type.includes('chat') && !n.type.includes('opportunity') && !n.type.includes('application')}"
+                                 'bi-bell text-secondary': n.type !== 'system:alert' && n.type !== 'system' && !n.type.includes('accepted') && !n.type.includes('rejected') && !n.type.includes('chat') && !n.type.includes('opportunity') && !n.type.includes('application')}"
                      style="font-size:1rem;margin-top:2px;flex-shrink:0"></i>
                   <div style="flex:1;min-width:0">
                     <div style="font-size:0.825rem;font-weight:600;color:#1e293b">{{ n.title }}</div>
@@ -246,7 +278,12 @@
           </div>
         </div>
         <div class="d-flex align-items-center gap-2" style="cursor:pointer" routerLink="/profile">
-          <div class="avatar" style="width:32px;height:32px;border-radius:50%;background:var(--wz-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.8rem;">{{ initials }}</div>
+          <ng-container *ngIf="user?.avatar; else topbarInitials">
+            <img [src]="user?.avatar || ''" alt="Profile" class="avatar" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block" />
+          </ng-container>
+          <ng-template #topbarInitials>
+            <div class="avatar" style="width:32px;height:32px;border-radius:50%;background:var(--wz-primary);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:0.8rem;">{{ initials }}</div>
+          </ng-template>
           <span class="topbar-user-name" style="font-size:0.875rem;font-weight:600;color:#374151">{{ user?.name }}</span>
           <i class="bi bi-chevron-down" style="font-size:0.75rem;color:#94a3b8"></i>
         </div>
@@ -257,5 +294,35 @@
     <div class="page-content">
       <router-outlet></router-outlet>
     </div>
+  </div>
+</div>
+
+<!-- First-time System Alert Dialog -->
+<div *ngIf="showSystemAlertDialog" class="wz-system-alert-backdrop" (click)="closeSystemAlertDialog()"></div>
+<div *ngIf="showSystemAlertDialog && activeSystemAlert" class="wz-system-alert-dialog" role="dialog" aria-modal="true" aria-label="System Alert" (click)="$event.stopPropagation()">
+  <div class="wz-system-alert-header">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-megaphone-fill text-danger"></i>
+      <span>System Alert</span>
+    </div>
+    <button class="btn btn-sm btn-link text-secondary p-0" aria-label="Close" (click)="closeSystemAlertDialog()">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+
+  <div class="wz-system-alert-body">
+    <h5>{{ activeSystemAlert.title }}</h5>
+    <p>{{ activeSystemAlert.message }}</p>
+    <div class="text-muted" style="font-size:0.78rem">
+      {{ activeSystemAlert.createdAt | date:'medium' }}
+    </div>
+    <div class="text-muted mt-2" style="font-size:0.78rem">
+      This alert stays in your Notifications so you can open it again later.
+    </div>
+  </div>
+
+  <div class="wz-system-alert-footer">
+    <button class="btn-wz-outline" (click)="closeSystemAlertDialog()">Close</button>
+    <button class="btn-wz-primary" (click)="confirmSystemAlert()">OK</button>
   </div>
 </div>

@@ -119,16 +119,11 @@ exports.getMyApplications = async (req, res) => {
   }
 };
 
-// ── GET    List applications for an opportunity (admin & owner) ──────────
+// ── GET    List applications for an opportunity (admin) ───────────────────
 exports.listApplicationsForOpportunity = async (req, res) => {
   try {
     const opp = await Opportunity.findById(req.params.opportunityId);
     if (!opp) return errorResponse(res, 404, 'Opportunity not found');
-
-    // Ownership check
-    if (opp.ngo_id.toString() !== req.user._id.toString()) {
-      return errorResponse(res, 403, 'Only the opportunity creator can view applications');
-    }
 
     const page = Math.max(1, parseInt(req.query.page) || 1);
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
@@ -168,7 +163,7 @@ exports.listApplicationsForOpportunity = async (req, res) => {
   }
 };
 
-// ── PUT    Accept / Reject application (admin & owner) ───────────────────
+// ── PUT    Accept / Reject application (admin) ────────────────────────────
 exports.decideApplication = async (req, res) => {
   try {
     const { decision } = req.body; // 'accepted' or 'rejected'
@@ -182,10 +177,6 @@ exports.decideApplication = async (req, res) => {
     // Verify opportunity ownership
     const opp = await Opportunity.findById(application.opportunity_id);
     if (!opp) return errorResponse(res, 404, 'Associated opportunity not found');
-    if (opp.ngo_id.toString() !== req.user._id.toString()) {
-      return errorResponse(res, 403, 'Only the opportunity creator can manage applications');
-    }
-
     // Cannot decide on already decided application
     if (application.status !== 'pending') {
       return errorResponse(res, 400, `Application already ${application.status}`);
@@ -195,14 +186,16 @@ exports.decideApplication = async (req, res) => {
     await application.save();
 
     // If accepted, optionally move opportunity to in-progress
-    if (decision === 'accepted' && opp.status === 'open') {
+    const shouldMoveOpportunity = decision === 'accepted' && opp.status === 'open';
+    if (shouldMoveOpportunity) {
       opp.status = 'in-progress';
       await opp.save();
     }
 
     await AdminLog.create({
       action: `APPLICATION_${decision.toUpperCase()}`,
-      user_id: req.user._id,
+      user_id: application.volunteer_id,
+      performedBy: req.user._id,
       details: `Application for "${opp.title}" ${decision} by ${req.user.name}`,
     });
 
@@ -225,7 +218,7 @@ exports.decideApplication = async (req, res) => {
       });
 
       // If opportunity status changed, notify all applicants
-      if (decision === 'accepted' && opp.status === 'open') {
+      if (shouldMoveOpportunity) {
         emitToRoom(`opportunity:${opp._id}`, 'opportunity:updated', {
           _id: opp._id, status: 'in-progress',
         });

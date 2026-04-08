@@ -23,6 +23,36 @@ const messageSchema = new mongoose.Schema({
   },
   mediaUrl: { type: String, default: null },
   mediaType: { type: String, enum: ['image', 'video', 'file', null], default: null },
+  reactions: [
+    {
+      user_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+      },
+      emoji: {
+        type: String,
+        required: true,
+        trim: true,
+      },
+      reactedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
+  isDeleted: {
+    type: Boolean,
+    default: false,
+  },
+  deletedAt: {
+    type: Date,
+    default: null,
+  },
+  editedAt: {
+    type: Date,
+    default: null,
+  },
   isRead: {
     type: Boolean,
     default: false,

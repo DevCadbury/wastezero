@@ -31,7 +31,7 @@ export class ForgotPasswordComponent {
         this.cdr.markForCheck();
       },
       error: (err) => {
-        this.error = err.error?.error || 'Something went wrong. Please try again.';
+        this.error = err.error?.message || err.error?.error || 'Something went wrong. Please try again.';
         this.loading = false;
         this.cdr.markForCheck();
       },

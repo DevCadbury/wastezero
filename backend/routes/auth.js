@@ -2,18 +2,11 @@ const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const AdminLog = require('../models/AdminLog');
 const { protect } = require('../middleware/auth');
-
-// Reusable mail transporter
-function getTransporter() {
-  return nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS },
-  });
-}
+const { sendEmail } = require('../emails/mailer');
+const { buildPasswordResetTemplate } = require('../emails/templates/passwordReset');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -57,6 +50,9 @@ router.post('/register', async (req, res) => {
       email: user.email,
       username: user.username,
       role: user.role,
+      avatar: user.avatar || null,
+      lastSeen: user.lastSeen || null,
+      emailPreferences: user.emailPreferences || {},
       rewardPoints: user.rewardPoints || 0,
       totalPointsEarned: user.totalPointsEarned || 0,
       token: generateToken(user._id),
@@ -92,6 +88,9 @@ router.post('/login', async (req, res) => {
       email: user.email,
       username: user.username,
       role: user.role,
+      avatar: user.avatar || null,
+      lastSeen: user.lastSeen || null,
+      emailPreferences: user.emailPreferences || {},
       location: user.location,
       skills: user.skills,
       bio: user.bio,
@@ -132,19 +131,12 @@ router.post('/forgot-password', async (req, res) => {
     await user.save({ validateBeforeSave: false });
 
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:4200'}/reset-password?token=${token}`;
-    const transporter = getTransporter();
-    await transporter.sendMail({
-      from: `"WasteZero" <${process.env.EMAIL_USER}>`,
+    const tpl = buildPasswordResetTemplate({ name: user.name, resetUrl });
+    await sendEmail({
       to: user.email,
-      subject: 'WasteZero — Password Reset Request',
-      html: `
-        <div style="font-family:Inter,sans-serif;max-width:520px;margin:0 auto;padding:32px;background:#f5f7fa;border-radius:12px;">
-          <h2 style="color:#2e7d32;margin-bottom:8px;">WasteZero Password Reset</h2>
-          <p>Hi <strong>${user.name}</strong>,</p>
-          <p>Click the button below to reset your password. This link expires in <strong>1 hour</strong>.</p>
-          <a href="${resetUrl}" style="display:inline-block;padding:12px 28px;background:#2e7d32;color:#fff;text-decoration:none;border-radius:8px;font-weight:700;margin:16px 0;">Reset Password</a>
-          <p style="font-size:0.85rem;color:#64748b;">If you didn't request this, you can safely ignore this email.</p>
-        </div>`,
+      subject: 'WasteZero Password Reset Request',
+      html: tpl.html,
+      text: tpl.text,
     });
     res.json({ message: 'If that email is registered, a reset link has been sent.' });
   } catch (err) {
