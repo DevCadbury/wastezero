@@ -7,13 +7,18 @@ const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const { initSocket, getOnlineUsers } = require('./socket');
 const { corsOriginHandler, getAllowedOrigins } = require('./config/cors');
+const isVercel = Boolean(process.env.VERCEL);
 
 // Connect to MongoDB
-connectDB();
+connectDB().catch((error) => {
+  console.error(`Initial DB connection failed: ${error.message}`);
+  if (!isVercel) {
+    process.exit(1);
+  }
+});
 
 const app = express();
 const server = http.createServer(app);
-const isVercel = Boolean(process.env.VERCEL);
 
 // Initialise Socket.IO on the HTTP server
 if (!isVercel) {
@@ -32,6 +37,24 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.set('trust proxy', 1);
+
+// Fast-fail when DB is unavailable to avoid Mongoose buffering timeouts per route.
+app.use(async (req, res, next) => {
+  if (req.method === 'OPTIONS' || req.path === '/api/health' || req.path === '/api/keepalive') {
+    return next();
+  }
+
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+
+  try {
+    await connectDB();
+    return next();
+  } catch (_err) {
+    return res.status(503).json({ message: 'Database unavailable. Please try again shortly.' });
+  }
+});
 
 // Cache-Control helper — attach to read-only routes
 app.use((req, res, next) => {
